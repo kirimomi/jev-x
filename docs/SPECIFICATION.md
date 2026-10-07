@@ -42,10 +42,28 @@
 
 ## 3. Jev 判定スキーマ設計
 
-Jevの特徴である「State（対象テキスト）」に対する「Questions（並列評価）」を利用します。
+Jevの特徴である「State（対象テキスト・コンテキスト）」に対する「Questions（並列評価）」を利用します。
 ユーザーがONにしているカテゴリのみをリクエストに含めることで、処理速度とトークン消費を最小化します。
 
-### 3.1 リクエスト例（TypeScript想定）
+### 3.1 評価コンテキスト（State）の構成
+ポスト本文だけでなく、**OGPリンクカード情報（タイトル・説明・ドメイン）** や画像ALTテキストを包括したリッチなコンテキストを構築します。これにより、「本文は短文だがリンク先が露骨な情報商材/AI Slop/釣り記事」といったケースを高精度に判定できます。
+
+```typescript
+// Jevへ渡すState（評価対象テキスト）の生成ロジック
+const state = [
+  `[投稿者]: @${authorUsername}`,
+  `[本文]: ${tweetText}`,
+  hasOgp ? [
+    `[リンクカード(OGP)]`,
+    `  - タイトル: ${ogp.title}`,
+    `  - 概要: ${ogp.description}`,
+    `  - ドメイン: ${ogp.domain}`
+  ].join('\n') : '',
+  imageAlts.length > 0 ? `[画像ALT]: ${imageAlts.join(', ')}` : ''
+].filter(Boolean).join('\n\n');
+```
+
+### 3.2 リクエスト例（TypeScript想定）
 ```typescript
 import { JevClient } from '@typesafe-ai/sdk';
 
@@ -62,7 +80,7 @@ const questions = activeCategories.map(cat => ({
 
 // バッチ実行
 const response = await jev.evaluate({
-  state: tweetText,
+  state: state,
   questions: questions
 });
 
@@ -82,13 +100,27 @@ for (const [catId, score] of Object.entries(response.scores)) {
 - **DOM監視**: `MutationObserver` で `article[data-testid="tweet"]` を検知。
 - **抽出データ**:
   - ツイートの一意識別子（Tweet ID / URLパーマリンク）
-  - 投稿者名・スクリーンネーム
-  - ツイート本文テキスト（画像ALTテキスト含む）
+  - 投稿者名・スクリーンネーム（`@handle`）
+  - ツイート本文テキスト
+  - **OGPカード情報**:
+    - `[data-testid="card.wrapper"]` 等からタイトル、説明文、ドメイン、URLを抽出
+  - **画像ALT属性**: `img[alt]` テキスト
   - リプライ関係（親ツイートへの返信かどうか）
-- **UI制御**:
-  - 判定中のポスト: ちらつきを防ぐためプレースホルダーまたはローディング表示。
-  - マスク対象ポスト: `filter: blur(12px)` + 半透明オーバーレイ。
-  - バッジ表示: マスク理由（例: `[🛡️ AI Slop 94%]`）と「クリックで表示」トグルを提供。
+- **UI制御（アコーディオン式 たたむ／開く）**:
+  - **完全消去ではなく「折りたたみ表示」を採用**:
+    - レイアウト崩れやTLジャンプ（ガタつき）を防ぐ。
+    - 誤判定時や興味がある場合にいつでも確認可能にする。
+  - **初期状態（フィルタ対象判定時）**:
+    - ポスト本体の要素を非表示（折りたたみ）化。
+    - コンパクトな **Jev Filter Bar** を挿入:
+      `[🛡️ AI Slop (94%) として非表示にしました] ──── [ 表示する ▼ ]`
+  - **展開時（「表示する ▼」クリック時）**:
+    - アコーディオン形式でポスト本体がスムーズに展開表示。
+    - Filter Bar は上部に小さく固定され、ボタンが `[ たたむ ▲ ]` に変化。
+  - **再折りたたみ時（「たたむ ▲」クリック時）**:
+    - 再度ポスト本体が折りたたまれ、初期のコンパクト表示に戻る。
+  - **誤判定フィードバック**:
+    - Filter Bar 内に「常に表示（このユーザー/ポストを除外）」ボタンを設置。
 
 ### 4.2 Background Service Worker
 - APIキーを安全に保持し、Content Scriptからの判定要求を取りまとめて Jev API へ中継。
