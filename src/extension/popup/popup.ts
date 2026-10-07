@@ -11,6 +11,32 @@ async function initPopup() {
 
     if (res) {
       globalToggle.checked = res.settings.globalEnabled;
+      const badgeToggle = document.getElementById('badge-toggle') as HTMLInputElement;
+      if (badgeToggle) {
+        badgeToggle.checked = res.settings.showDebugBadges !== false;
+        badgeToggle.addEventListener('change', async () => {
+          res.settings.showDebugBadges = badgeToggle.checked;
+          const saveReq: SaveSettingsRequest = {
+            type: 'SAVE_SETTINGS',
+            settings: res.settings,
+          };
+          await chrome.runtime.sendMessage(saveReq);
+        });
+      }
+
+      const foldBannerToggle = document.getElementById('fold-banner-toggle') as HTMLInputElement;
+      if (foldBannerToggle) {
+        foldBannerToggle.checked = res.settings.showFoldBanner !== false;
+        foldBannerToggle.addEventListener('change', async () => {
+          res.settings.showFoldBanner = foldBannerToggle.checked;
+          const saveReq: SaveSettingsRequest = {
+            type: 'SAVE_SETTINGS',
+            settings: res.settings,
+          };
+          await chrome.runtime.sendMessage(saveReq);
+        });
+      }
+
       if (res.hasApiKey) {
         apiStatusBadge.textContent = 'API接続OK';
         apiStatusBadge.className = 'status-badge';

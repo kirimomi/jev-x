@@ -7,8 +7,6 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        content: resolve(__dirname, 'src/extension/content/index.ts'),
-        background: resolve(__dirname, 'src/extension/background/index.ts'),
         options: resolve(__dirname, 'options.html'),
         popup: resolve(__dirname, 'popup.html'),
       },

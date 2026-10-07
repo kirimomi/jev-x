@@ -67,6 +67,10 @@ export interface CategorySetting {
 export interface UserFilterSettings {
   categories: Record<CategoryId, CategorySetting>;
   globalEnabled: boolean;
+  /** Whether to display a compact decision badge on every post */
+  showDebugBadges: boolean;
+  /** Whether to show accordion fold/unfold banner (true) or completely hide filtered posts without banner (false) */
+  showFoldBanner: boolean;
 }
 
 /**
@@ -88,6 +92,7 @@ export interface FilterDecision {
   primaryReason?: CategoryId;
   primaryProbability?: number;
   matchedCategories: CategoryScoreResult[];
+  allScores?: Record<string, number>;
   evaluatedAt: number; // timestamp
   latencyMs: number;
 }

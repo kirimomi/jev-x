@@ -197,9 +197,12 @@
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>🛡️ jev-x 設定</h1>
-      <p class="subtitle">Jev (TypeSafe AI) によるXタイムラインのコンテンツフィルタリング</p>
+    <header style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h1>🛡️ jev-x 設定</h1>
+        <p class="subtitle">Jev (TypeSafe AI) によるXタイムラインのコンテンツフィルタリング</p>
+      </div>
+      <button id="save-all-btn" class="btn" style="padding: 10px 24px; font-size: 15px;">設定を保存</button>
     </header>
 
     <div id="status-msg">設定を保存しました。</div>
@@ -216,13 +219,54 @@
     </div>
 
     <div class="card">
-      <div class="card-title">
-        <span>🛡️ フィルタ対象カテゴリ</span>
-        <button id="save-all-btn" class="btn">設定を保存</button>
+      <h2 class="card-title">⚙️ 表示設定</h2>
+      <div class="category-item" style="background: transparent; border: none; padding: 0;">
+        <div class="category-info">
+          <div class="category-header">
+            <span>🔍 判定結果の簡易バッジ表示</span>
+          </div>
+          <div class="category-desc">
+            タイムライン上の各ポストに、Jevによる判定結果（SAFE / カテゴリ名 / 確信度 / 応答速度）のミニバッジを表示します。
+          </div>
+        </div>
+        <div class="category-controls">
+          <label class="switch">
+            <input type="checkbox" id="show-debug-badges" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 14px 0;" />
+
+      <div class="category-item" style="background: transparent; border: none; padding: 0;">
+        <div class="category-info">
+          <div class="category-header">
+            <span>🪗 折りたたみバナーを表示（開閉機能）</span>
+          </div>
+          <div class="category-desc">
+            ON: フィルタ対象ポストを薄型バナーで折りたたみ、クリックで開閉可能にします。<br />
+            OFF: バナーも残さず、タイムラインから完全に消去（完全非表示）します。
+          </div>
+        </div>
+        <div class="category-controls">
+          <label class="switch">
+            <input type="checkbox" id="show-fold-banner" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">🛡️ フィルタ対象カテゴリ</h2>
       <div class="category-list" id="category-list">
         <!-- Rendered by options.ts -->
       </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 20px; margin-bottom: 40px;">
+      <button id="save-all-btn-bottom" class="btn" style="padding: 12px 36px; font-size: 15px;">設定を保存</button>
     </div>
   </div>
 

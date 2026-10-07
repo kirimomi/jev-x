@@ -6,8 +6,8 @@
   "scripts": {
     "test:filter": "tsx scripts/test-filter.ts",
     "test:filter:mock": "tsx scripts/test-filter.ts --mock",
-    "build:ext": "vite build",
-    "build": "tsc && vite build"
+    "build:ext": "vite build && vite build --config vite.config.background.ts && vite build --config vite.config.content.ts",
+    "build": "tsc && vite build && vite build --config vite.config.background.ts && vite build --config vite.config.content.ts"
   },
   "keywords": [
     "jev",

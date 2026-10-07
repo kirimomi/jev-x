@@ -39,8 +39,8 @@ function renderCategories() {
       </div>
       <div class="category-controls">
         <div class="slider-group">
-          <span>感度: <b id="val-${cat.id}">${(userConf.threshold * 100).toFixed(0)}%</b></span>
-          <input type="range" id="thresh-${cat.id}" min="50" max="95" step="5" value="${Math.round(userConf.threshold * 100)}" />
+          <span>閾値: <b id="val-${cat.id}">${(userConf.threshold * 100).toFixed(0)}%</b></span>
+          <input type="range" id="thresh-${cat.id}" min="20" max="95" step="5" value="${Math.round(userConf.threshold * 100)}" />
         </div>
         <label class="switch">
           <input type="checkbox" id="toggle-${cat.id}" ${userConf.enabled ? 'checked' : ''} />
@@ -68,6 +68,9 @@ function renderCategories() {
   }
 }
 
+const showDebugBadgesToggle = document.getElementById('show-debug-badges') as HTMLInputElement;
+const showFoldBannerToggle = document.getElementById('show-fold-banner') as HTMLInputElement;
+
 async function loadSettings() {
   try {
     const req: GetSettingsRequest = { type: 'GET_SETTINGS' };
@@ -85,11 +88,31 @@ async function loadSettings() {
     console.warn('Failed to load settings from background:', error);
   }
 
+  if (showDebugBadgesToggle) {
+    showDebugBadgesToggle.checked = settings.showDebugBadges !== false;
+    showDebugBadgesToggle.addEventListener('change', () => {
+      settings.showDebugBadges = showDebugBadgesToggle.checked;
+    });
+  }
+
+  if (showFoldBannerToggle) {
+    showFoldBannerToggle.checked = settings.showFoldBanner !== false;
+    showFoldBannerToggle.addEventListener('change', () => {
+      settings.showFoldBanner = showFoldBannerToggle.checked;
+    });
+  }
+
   renderCategories();
 }
 
 async function saveSettings() {
   const newApiKey = apiKeyInput.value.trim();
+  if (showDebugBadgesToggle) {
+    settings.showDebugBadges = showDebugBadgesToggle.checked;
+  }
+  if (showFoldBannerToggle) {
+    settings.showFoldBanner = showFoldBannerToggle.checked;
+  }
 
   const req: SaveSettingsRequest = {
     type: 'SAVE_SETTINGS',
@@ -111,4 +134,8 @@ async function saveSettings() {
 }
 
 saveBtn.addEventListener('click', saveSettings);
+const saveBtnBottom = document.getElementById('save-all-btn-bottom');
+if (saveBtnBottom) {
+  saveBtnBottom.addEventListener('click', saveSettings);
+}
 loadSettings();

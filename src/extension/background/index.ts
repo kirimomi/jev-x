@@ -1,6 +1,6 @@
 import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
-import { UserFilterSettings } from '../../types/index.js';
+import { UserFilterSettings, CategoryId } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
 
 let filterEngine: FilterEngine | null = null;
@@ -10,10 +10,28 @@ let currentApiKey: string | undefined = undefined;
 async function initEngine() {
   const data = await chrome.storage.local.get(['userSettings', 'typesafeApiKey']);
   if (data.userSettings) {
-    currentSettings = data.userSettings;
+    const stored = data.userSettings as Partial<UserFilterSettings>;
+    const defaultSettings = getDefaultUserSettings();
+    const mergedCategories = { ...defaultSettings.categories };
+    if (stored.categories) {
+      for (const [key, conf] of Object.entries(stored.categories)) {
+        const catId = key as CategoryId;
+        if (mergedCategories[catId]) {
+          mergedCategories[catId] = {
+            enabled: conf.enabled,
+            threshold: conf.threshold >= 0.7 ? 0.5 : conf.threshold,
+          };
+        }
+      }
+    }
+    currentSettings = {
+      ...defaultSettings,
+      ...stored,
+      categories: mergedCategories,
+    };
   }
   if (data.typesafeApiKey) {
-    currentApiKey = data.typesafeApiKey;
+    currentApiKey = data.typesafeApiKey as string;
   }
 
   filterEngine = new FilterEngine({
@@ -21,7 +39,7 @@ async function initEngine() {
     mockMode: !currentApiKey,
   });
 
-  console.log('[jev-x background] Initialized engine, mockMode:', !currentApiKey);
+  console.log('[jev-x background] Initialized engine, mockMode:', !currentApiKey, 'showBadges:', currentSettings.showDebugBadges);
 }
 
 // Initial setup
@@ -30,16 +48,21 @@ initEngine();
 // Handle messages from content script or options page
 chrome.runtime.onMessage.addListener((message: ExtensionRequest, _sender, sendResponse) => {
   (async () => {
-    if (!filterEngine) {
-      await initEngine();
-    }
-
-    switch (message.type) {
-      case 'EVALUATE_TWEETS': {
-        const decisions = await filterEngine!.evaluateBatch(message.tweets, currentSettings);
-        sendResponse({ decisions });
-        break;
+    try {
+      if (!filterEngine) {
+        await initEngine();
       }
+
+      switch (message.type) {
+        case 'EVALUATE_TWEETS': {
+          const decisions = await filterEngine!.evaluateBatch(message.tweets, currentSettings);
+          sendResponse({
+            decisions,
+            showDebugBadges: currentSettings.showDebugBadges !== false,
+            showFoldBanner: currentSettings.showFoldBanner !== false,
+          });
+          break;
+        }
 
       case 'GET_SETTINGS': {
         sendResponse({
@@ -73,6 +96,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, _sender, sendRe
       default:
         sendResponse({ error: 'Unknown request type' });
     }
+  } catch (err) {
+    console.error('[jev-x background] Message processing error:', err);
+    sendResponse({ error: String(err) });
+  }
   })();
 
   return true; // Keep message channel open for async response

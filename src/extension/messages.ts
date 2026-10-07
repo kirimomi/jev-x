@@ -7,6 +7,8 @@ export interface EvaluateTweetsRequest {
 
 export interface EvaluateTweetsResponse {
   decisions: FilterDecision[];
+  showDebugBadges?: boolean;
+  showFoldBanner?: boolean;
 }
 
 export interface GetSettingsRequest {

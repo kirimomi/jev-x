@@ -69,61 +69,61 @@ function mockEvaluate(
   }
 
   if (activeCategoryIds.includes('adult_nsfw')) {
-    if (text.includes('裏垢') || text.includes('オナ') || text.includes('エロ') || text.includes('nsfw') || text.includes('パパ活')) {
+    if (text.includes('裏垢') || text.includes('オナ') || text.includes('エロ') || text.includes('nsfw') || text.includes('パパ活') || text.includes('マン凸') || text.includes('巨乳') || text.includes('無修正') || text.includes('出会い')) {
       scores['adult_nsfw'] = 0.95;
     }
   }
 
   if (activeCategoryIds.includes('ai_slop')) {
-    if (text.includes('ai美女') || text.includes('chatgptに聞いたら') || text.includes('ai生成') || text.includes('slop') || text.includes('midjourney')) {
+    if (text.includes('ai美女') || text.includes('chatgpt') || text.includes('gpt') || text.includes('ai生成') || text.includes('slop') || text.includes('midjourney') || text.includes('プロンプト') || text.includes('画像生成') || text.includes('自動化') || text.includes('量産') || text.includes('生成ai')) {
       scores['ai_slop'] = 0.92;
     }
   }
 
   if (activeCategoryIds.includes('impression_zombie')) {
-    if (tweet.isReply && (tweet.text.length < 10 || /^[\p{Emoji}\s]+$/u.test(tweet.text) || /[\u0600-\u06FF]/.test(tweet.text))) {
+    if (tweet.isReply && (tweet.text.length < 15 || /^[\p{Emoji}\s]+$/u.test(tweet.text) || /[\u0600-\u06FF]/.test(tweet.text) || /^(nice|great|good|wow|cool|awesome|lol)/i.test(tweet.text))) {
       scores['impression_zombie'] = 0.96;
     }
   }
 
   if (activeCategoryIds.includes('thread_bait')) {
-    if (text.includes('最後にとんでもない') || text.includes('続きはツリー') || text.includes('プロフへ') || text.includes('👇') || text.includes('1/')) {
+    if (text.includes('最後にとんでもない') || text.includes('続きはツリー') || text.includes('プロフへ') || text.includes('👇') || text.includes('1/') || text.includes('ツリー') || text.includes('リプ欄') || text.includes('保存') || text.includes('ブクマ') || text.includes('まとめました') || text.includes('選') || text.includes('知らなきゃ損')) {
       scores['thread_bait'] = 0.88;
     }
   }
 
   if (activeCategoryIds.includes('scam_hustle')) {
-    if (text.includes('月100万') || text.includes('brain') || text.includes('プレゼント企画') || text.includes('プロンプト配布') || text.includes('誰でも稼げる')) {
+    if (text.includes('月100万') || text.includes('brain') || text.includes('プレゼント企画') || text.includes('プロンプト配布') || text.includes('誰でも稼げる') || text.includes('副業') || text.includes('無料配布') || text.includes('フォロワー限定') || text.includes('tips') || text.includes('不労所得') || text.includes('完全自動')) {
       scores['scam_hustle'] = 0.94;
     }
   }
 
   if (activeCategoryIds.includes('rage_bait')) {
-    if (text.includes('男はこれだから') || text.includes('女の敵') || text.includes('z世代は') || text.includes('民度低すぎ')) {
+    if (text.includes('男はこれだから') || text.includes('女の敵') || text.includes('z世代') || text.includes('民度') || text.includes('害悪') || text.includes('炎上') || text.includes('フェミ') || text.includes('弱男') || text.includes('晒し') || text.includes('クソリプ') || text.includes('老害')) {
       scores['rage_bait'] = 0.89;
     }
   }
 
   if (activeCategoryIds.includes('toxic_venting')) {
-    if (text.includes('死ね') || text.includes('ゴミすぎる') || text.includes('消えろ') || text.includes('クソが')) {
+    if (text.includes('死ね') || text.includes('ゴミすぎる') || text.includes('消えろ') || text.includes('クソが') || text.includes('最悪') || text.includes('ウザい') || text.includes('イライラ') || text.includes('鬱')) {
       scores['toxic_venting'] = 0.91;
     }
   }
 
   if (activeCategoryIds.includes('preachy_guru')) {
-    if (text.includes('優秀な人ほど') || text.includes('残酷な真実') || text.includes('30代で気づいたこと')) {
+    if (text.includes('優秀な人ほど') || text.includes('残酷な真実') || text.includes('30代で気づいたこと') || text.includes('本質') || text.includes('思考法') || text.includes('成功者') || text.includes('習慣')) {
       scores['preachy_guru'] = 0.86;
     }
   }
 
   if (activeCategoryIds.includes('affiliate_spam')) {
-    if (text.includes('セールでこれだけは買え') || text.includes('リプ欄にお得') || text.includes('amzn.to')) {
+    if (text.includes('セールでこれだけは買え') || text.includes('リプ欄にお得') || text.includes('amzn.to') || text.includes('amazon') || text.includes('クーポン') || text.includes('ポイント還元') || text.includes('楽天')) {
       scores['affiliate_spam'] = 0.93;
     }
   }
 
   if (activeCategoryIds.includes('spoilers')) {
-    if (text.includes('の結末') || text.includes('が死亡') || text.includes('ネタバレ')) {
+    if (text.includes('の結末') || text.includes('が死亡') || text.includes('ネタバレ') || text.includes('ラストシーン')) {
       scores['spoilers'] = 0.90;
     }
   }
@@ -255,6 +255,7 @@ export class FilterEngine {
       primaryReason,
       primaryProbability: primaryReason ? highestProbability : undefined,
       matchedCategories,
+      allScores: categoryScores,
       evaluatedAt: Date.now(),
       latencyMs: Math.round(performance.now() - startTime),
     };
