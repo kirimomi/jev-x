@@ -9,7 +9,8 @@
   "host_permissions": [
     "https://x.com/*",
     "https://twitter.com/*",
-    "https://api.typesafe.ai/*"
+    "https://api.typesafe.ai/*",
+    "https://pbs.twimg.com/*"
   ],
   "background": {
     "service_worker": "background.js",

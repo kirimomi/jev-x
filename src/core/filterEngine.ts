@@ -24,6 +24,10 @@ export function buildTweetState(tweet: TweetData): string {
     : `[投稿者]: @${tweet.authorUsername}`;
   parts.push(authorPart);
 
+  if (tweet.authorBio) {
+    parts.push(`[投稿者のプロフィール (BIO)]:\n${tweet.authorBio}`);
+  }
+
   if (tweet.isReply) {
     parts.push(`[投稿種別]: 他ユーザーへの返信 (リプライ)`);
   }
@@ -43,6 +47,14 @@ export function buildTweetState(tweet: TweetData): string {
     parts.push(`[画像説明(ALT)]: ${tweet.imageAlts.join(', ')}`);
   }
 
+  if (tweet.hasSensitiveWarning) {
+    parts.push(`[X公式フラグ]: センシティブ警告オーバーレイあり (成人向け/閲覧注意判定)`);
+  }
+
+  if (tweet.vision && tweet.vision.hasImages) {
+    parts.push(`[画像解析(Vision)]: 露出度判定=${tweet.vision.label} (露出度スコア: ${(tweet.vision.exposureScore * 100).toFixed(0)}%, NSFW疑い=${tweet.vision.isLikelyNsfw ? '高' : '低'})`);
+  }
+
   return parts.join('\n\n');
 }
 
@@ -57,6 +69,8 @@ function mockEvaluate(
   const text = (
     tweet.text +
     ' ' +
+    (tweet.authorBio || '') +
+    ' ' +
     (tweet.ogp?.title || '') +
     ' ' +
     (tweet.ogp?.description || '') +
@@ -69,7 +83,9 @@ function mockEvaluate(
   }
 
   if (activeCategoryIds.includes('adult_nsfw')) {
-    if (text.includes('裏垢') || text.includes('オナ') || text.includes('エロ') || text.includes('nsfw') || text.includes('パパ活') || text.includes('マン凸') || text.includes('巨乳') || text.includes('無修正') || text.includes('出会い')) {
+    if (tweet.hasSensitiveWarning || tweet.vision?.isLikelyNsfw) {
+      scores['adult_nsfw'] = 0.98;
+    } else if (text.includes('裏垢') || text.includes('オナ') || text.includes('エロ') || text.includes('nsfw') || text.includes('パパ活') || text.includes('マン凸') || text.includes('巨乳') || text.includes('無修正') || text.includes('出会い') || text.includes('サブスク') || text.includes('オナレコ') || text.includes('凸') || text.includes('p活') || text.includes('18禁') || text.includes('ファンティア') || text.includes('fantia') || text.includes('myfans') || text.includes('onlyfans')) {
       scores['adult_nsfw'] = 0.95;
     }
   }
@@ -229,7 +245,18 @@ export class FilterEngine {
     let primaryReason: CategoryId | undefined;
     let highestProbability = -1;
 
+    const hasMedia = Boolean(
+      tweet.hasSensitiveWarning ||
+      (tweet.vision && tweet.vision.hasImages && tweet.vision.imageCount > 0) ||
+      (tweet.imageAlts && tweet.imageAlts.length > 0)
+    );
+
     for (const catId of activeCategoryIds) {
+      // If user enabled "requireMediaForAdult", ignore adult_nsfw for text-only posts
+      if (catId === 'adult_nsfw' && settings.requireMediaForAdult && !hasMedia) {
+        continue;
+      }
+
       const prob = categoryScores[catId] ?? 0;
       const threshold = settings.categories[catId]?.threshold ?? 0.7;
       const isMatched = prob >= threshold;
@@ -256,6 +283,7 @@ export class FilterEngine {
       primaryProbability: primaryReason ? highestProbability : undefined,
       matchedCategories,
       allScores: categoryScores,
+      visionResult: tweet.vision,
       evaluatedAt: Date.now(),
       latencyMs: Math.round(performance.now() - startTime),
     };

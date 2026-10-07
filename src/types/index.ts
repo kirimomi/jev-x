@@ -9,16 +9,32 @@ export interface OgpCardInfo {
 }
 
 /**
+ * Image vision analysis result
+ */
+export interface ImageVisionResult {
+  hasImages: boolean;
+  imageCount: number;
+  exposureScore: number; // 0.0 - 1.0 (skin/nudity ratio estimate)
+  isLikelyNsfw: boolean;
+  label: 'Neutral' | 'Sexy' | 'Explicit' | 'WarningOverlay';
+  details?: string;
+}
+
+/**
  * Extracted Tweet / Post data from X (Twitter) DOM
  */
 export interface TweetData {
   id: string;
   authorUsername: string;
   authorName?: string;
+  authorBio?: string;
   text: string;
   ogp?: OgpCardInfo;
   imageAlts?: string[];
+  imageUrls?: string[];
   isReply?: boolean;
+  hasSensitiveWarning?: boolean;
+  vision?: ImageVisionResult;
 }
 
 /**
@@ -71,6 +87,8 @@ export interface UserFilterSettings {
   showDebugBadges: boolean;
   /** Whether to show accordion fold/unfold banner (true) or completely hide filtered posts without banner (false) */
   showFoldBanner: boolean;
+  /** If true, posts without media (no images/cards/sensitive flags) will NOT be filtered as adult_nsfw */
+  requireMediaForAdult: boolean;
 }
 
 /**
@@ -93,6 +111,7 @@ export interface FilterDecision {
   primaryProbability?: number;
   matchedCategories: CategoryScoreResult[];
   allScores?: Record<string, number>;
+  visionResult?: ImageVisionResult;
   evaluatedAt: number; // timestamp
   latencyMs: number;
 }

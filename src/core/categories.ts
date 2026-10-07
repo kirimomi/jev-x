@@ -113,5 +113,6 @@ export function getDefaultUserSettings(): UserFilterSettings {
     globalEnabled: true,
     showDebugBadges: true,
     showFoldBanner: true,
+    requireMediaForAdult: false, // by default allow user to toggle
   };
 }

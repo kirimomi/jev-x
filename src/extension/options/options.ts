@@ -70,6 +70,7 @@ function renderCategories() {
 
 const showDebugBadgesToggle = document.getElementById('show-debug-badges') as HTMLInputElement;
 const showFoldBannerToggle = document.getElementById('show-fold-banner') as HTMLInputElement;
+const requireMediaForAdultToggle = document.getElementById('require-media-for-adult') as HTMLInputElement;
 
 async function loadSettings() {
   try {
@@ -102,6 +103,13 @@ async function loadSettings() {
     });
   }
 
+  if (requireMediaForAdultToggle) {
+    requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
+    requireMediaForAdultToggle.addEventListener('change', () => {
+      settings.requireMediaForAdult = requireMediaForAdultToggle.checked;
+    });
+  }
+
   renderCategories();
 }
 
@@ -112,6 +120,9 @@ async function saveSettings() {
   }
   if (showFoldBannerToggle) {
     settings.showFoldBanner = showFoldBannerToggle.checked;
+  }
+  if (requireMediaForAdultToggle) {
+    settings.requireMediaForAdult = requireMediaForAdultToggle.checked;
   }
 
   const req: SaveSettingsRequest = {

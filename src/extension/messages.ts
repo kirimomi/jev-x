@@ -30,7 +30,27 @@ export interface SaveSettingsResponse {
   success: boolean;
 }
 
+export interface AnalyzeImageUrlRequest {
+  type: 'ANALYZE_IMAGE_URL';
+  url: string;
+}
+
+export interface AnalyzeImageUrlResponse {
+  score: number;
+}
+
+export interface FetchUserBioRequest {
+  type: 'FETCH_USER_BIO';
+  username: string;
+}
+
+export interface FetchUserBioResponse {
+  bio?: string;
+}
+
 export type ExtensionRequest =
   | EvaluateTweetsRequest
   | GetSettingsRequest
-  | SaveSettingsRequest;
+  | SaveSettingsRequest
+  | AnalyzeImageUrlRequest
+  | FetchUserBioRequest;

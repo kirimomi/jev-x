@@ -23,7 +23,7 @@
 
 ## 2. フィルタカテゴリ一覧と判定基準
 
-各カテゴリは個別に有効化/無効化（Toggle）および感度しきい値（Threshold: 0.0〜1.0、デフォルト0.7）を設定可能です。
+各カテゴリは個別に有効化/無効化（Toggle）および感度しきい値（Threshold: 0.0〜1.0、デフォルト0.5に改定）を設定可能です。
 
 | ID | カテゴリ名 | 判定プロンプト指針 |
 | :--- | :--- | :--- |
@@ -46,89 +46,63 @@ Jevの特徴である「State（対象テキスト・コンテキスト）」に
 ユーザーがONにしているカテゴリのみをリクエストに含めることで、処理速度とトークン消費を最小化します。
 
 ### 3.1 評価コンテキスト（State）の構成
-ポスト本文だけでなく、**OGPリンクカード情報（タイトル・説明・ドメイン）** や画像ALTテキストを包括したリッチなコンテキストを構築します。これにより、「本文は短文だがリンク先が露骨な情報商材/AI Slop/釣り記事」といったケースを高精度に判定できます。
+ポスト本文だけでなく、**OGPリンクカード情報（タイトル・説明・ドメイン）**、画像ALTテキスト、X公式の警告状態、およびブラウザ内で解析された画像露出度を包括したリッチなコンテキストを構築します。
 
 ```typescript
 // Jevへ渡すState（評価対象テキスト）の生成ロジック
-const state = [
-  `[投稿者]: @${authorUsername}`,
-  `[本文]: ${tweetText}`,
-  hasOgp ? [
-    `[リンクカード(OGP)]`,
-    `  - タイトル: ${ogp.title}`,
-    `  - 概要: ${ogp.description}`,
-    `  - ドメイン: ${ogp.domain}`
-  ].join('\n') : '',
-  imageAlts.length > 0 ? `[画像ALT]: ${imageAlts.join(', ')}` : ''
-].filter(Boolean).join('\n\n');
-```
+const parts: string[] = [
+  `[投稿者]: ${authorName} (@${authorUsername})`,
+  isReply ? `[投稿種別]: 他ユーザーへの返信 (リプライ)` : '',
+  `[本文]:\n${text}`,
+  hasOgp ? `[リンクカード(OGP)]:\n  - タイトル: ${ogp.title}\n  - ドメイン: ${ogp.domain}` : '',
+  imageAlts.length > 0 ? `[画像説明(ALT)]: ${imageAlts.join(', ')}` : '',
+  hasSensitiveWarning ? `[X公式フラグ]: センシティブ警告オーバーレイあり (成人向け/閲覧注意判定)` : '',
+  vision?.hasImages ? `[画像解析(Vision)]: 露出度判定=${vision.label} (露出度スコア: ${(vision.exposureScore * 100).toFixed(0)}%, NSFW疑い=${vision.isLikelyNsfw ? '高' : '低'})` : ''
+].filter(Boolean);
 
-### 3.2 リクエスト例（TypeScript想定）
-```typescript
-import { JevClient } from '@typesafe-ai/sdk';
-
-const jev = new JevClient({ apiKey: userApiKey });
-
-// ユーザーが有効化しているカテゴリのみ抽出
-const activeCategories = getActiveCategories(); // 例: ['ai_slop', 'impression_zombie', 'thread_bait']
-
-const questions = activeCategories.map(cat => ({
-  id: cat.id,
-  type: 'score', // 0.0 〜 1.0 の確信度
-  prompt: cat.detectionPrompt
-}));
-
-// バッチ実行
-const response = await jev.evaluate({
-  state: state,
-  questions: questions
-});
-
-// レスポンス処理
-for (const [catId, score] of Object.entries(response.scores)) {
-  if (score >= getThreshold(catId)) {
-    return { shouldFilter: true, reason: catId, score };
-  }
-}
+const state = parts.join('\n\n');
 ```
 
 ---
 
-## 4. クライアントアーキテクチャ (Chrome拡張)
+## 4. クライアントアーキテクチャ (Chrome拡張 Manifest V3)
 
 ### 4.1 Content Script
-- **DOM監視**: `MutationObserver` で `article[data-testid="tweet"]` を検知。
+- **DOM監視のスロットリング**: `MutationObserver` の変更検知イベントを 200ms 間隔でスロットリングし、UIスクロール時のカクつきとCPU負荷を最小化。
 - **抽出データ**:
   - ツイートの一意識別子（Tweet ID / URLパーマリンク）
   - 投稿者名・スクリーンネーム（`@handle`）
   - ツイート本文テキスト
-  - **OGPカード情報**:
-    - `[data-testid="card.wrapper"]` 等からタイトル、説明文、ドメイン、URLを抽出
+  - **OGPカード情報**: 最新のXカード構造（`card.wrapper` / 大画像オーバーレイ形式）に対応し、記事見出しタイトル・ドメインを抽出。
   - **画像ALT属性**: `img[alt]` テキスト
-  - リプライ関係（親ツイートへの返信かどうか）
-- **UI制御（アコーディオン式 たたむ／開く）**:
-  - **完全消去ではなく「折りたたみ表示」を採用**:
-    - レイアウト崩れやTLジャンプ（ガタつき）を防ぐ。
-    - 誤判定時や興味がある場合にいつでも確認可能にする。
-  - **初期状態（フィルタ対象判定時）**:
-    - ポスト本体の要素を非表示（折りたたみ）化。
-    - コンパクトな **Jev Filter Bar** を挿入:
-      `[🛡️ AI Slop (94%) として非表示にしました] ──── [ 表示する ▼ ]`
-  - **展開時（「表示する ▼」クリック時）**:
-    - アコーディオン形式でポスト本体がスムーズに展開表示。
-    - Filter Bar は上部に小さく固定され、ボタンが `[ たたむ ▲ ]` に変化。
-  - **再折りたたみ時（「たたむ ▲」クリック時）**:
-    - 再度ポスト本体が折りたたまれ、初期のコンパクト表示に戻る。
-  - **誤判定フィードバック**:
-    - Filter Bar 内に「常に表示（このユーザー/ポストを除外）」ボタンを設置。
+  - **メディア要素（通常投稿画像 ＋ OGPカードサムネイル）**: アバターアイコンを除外したすべてのコンテンツ画像を収集。
+  - **遅延ロード（Lazy-loading）追従**:
+    - ポスト描画後に遅れて表示される画像やOGPカードを検知し、`data-jev-rechecked="true"` ガードで多重ループを防ぎつつ自動的に画像再解析を実行。
+- **UI制御・表示モード**:
+  1. **アコーディオン折りたたみモード（デフォルト）**:
+     - 薄型の Filter Banner を挿入し、クリックでいつでも `表示する ▼` / `たたむ ▲` のトグルが可能。
+     - バナー上にも判定確率と画像解析結果をインライン表示。
+  2. **完全ステルス非表示モード (Stealth Hide)**:
+     - 設定で「折りたたみバナーを表示」をOFFにすることで、バナーも残さずタイムラインから完全に消去（広告ブロック感覚での利用）。
+  3. **インスペクション / デバッグバッジ (Inspect Badge)**:
+     - すべてのポスト（SAFE含む）に、判定結果（SAFE / カテゴリ名 / 確信度 / 応答速度 / 画像露出度 `[📷 露出 XX%]` / `[⚠️ X警告]`）をコンパクトにリアルタイム表示。設定画面・PopupからON/OFF可能。
 
-### 4.2 Background Service Worker
-- APIキーを安全に保持し、Content Scriptからの判定要求を取りまとめて Jev API へ中継。
-- **デバウンス & バッチ処理**: スクロールによって一度に5〜10件検知されたツイートを束ねて、1往復のAPIコールで並列判定。
+### 4.2 Background Service Worker & 画像露出解析 (Vision Analyzer)
+- **CORS回避・画像肌色露出度アナライザー (`visionAnalyzer.ts`)**:
+  - Content Script 内での Canvas Tainted（CORS制限）を回避するため、拡張機能の権限（`host_permissions: ["https://pbs.twimg.com/*"]`）を持つ Service Worker 側で画像を `fetch`。
+  - `OffscreenCanvas`（64×64ピクセル）にダウンサンプリング展開し、YCbCr 色空間による肌色露出面積比率をサブミリ秒（< 1ms）で高速計算。
+  - **画像URLキャッシュ (`imageScoreCache`)**: 同一の画像URLに対する二重フェッチを完全防止。
+- **レートリミット保護・安全方針**:
+  - Xのサーバーへ過度な負荷をかけないため、外部ユーザーページへの個別リクエスト（プロフィール巡回等）は一切行わず、**ブラウザのDOM内にすでに読み込まれているデータのみ**で判定を完結。
+- **拡張機能リロード時の切断保護**:
+  - `chrome.runtime?.id` を監視し、拡張機能の更新時（`Extension context invalidated`）に安全に監視を切断・エラーを握り潰し、タブのフリーズやクラッシュを防止。
 
-### 4.3 キャッシュレイヤー (IndexedDB)
-- 同一ツイートに対する重複判定を防ぐため、`tweetId` をキーに結果（Safe / Masked + 理由 + スコア）をローカル保存。
-- ユーザーが手動で「再判定」「誤判定（ホワイトリスト化）」できる仕組みを整備。
+### 4.3 ユーザー設定 (Options & Popup)
+- **閾値の初期値**: 0.7 から **0.5 (50%)** へ変更（より積極的に折りたたむ調整）。
+- **「🔞 アダルト判定は『メディア付き』のみに限定」オプション**:
+  - ON に設定することで、画像やリンクカード、警告のない**テキスト単体の投稿**（ニュース言及、技術解説等）で「アダルト」「エロ」等の単語が出ても `adult_nsfw` で誤爆折りたたみされるのを防止。
+- **保存UIの最適化**:
+  - 設定保存ボタンをヘッダー右上およびフッター右下の両方に配置し、全設定を一括保存可能に。
 
 ---
 
@@ -146,12 +120,11 @@ for (const [catId, score] of Object.entries(response.scores)) {
 2. **設定・キャッシュのクラウド同期 (オプション拡張)**
    - PCで作成した「NG設定」「ホワイトリスト」をモバイルブラウザ側にも共有するため、軽量なストレージ（Cloudflare Workers KV または Supabase）を連携可能にする。
 
-3. **公式ネイティブアプリの通信改変 (非推奨・不採用)**
-   - SSL Pinning回避や証明書インストールが必要となり、アプリの更新で恒常的に破損するため採用しない。
-
 ---
 
-## 6. セキュリティとプライバシー
+## 6. セキュリティ・プライバシー・安全性
 
-- **APIキーの保護**: 拡張機能の `chrome.storage.sync` または `local` に暗号化/ローカル保持し、第三者サーバーへは送信しない。
-- **データ送信の最小化**: ツイート判定に必要なテキストのみを Jev API に送信し、ユーザー自身の個人情報や閲覧履歴は外部送信しない。
+- **APIキーの保護**: 拡張機能の `chrome.storage.local` にローカル保持し、第三者サーバーへは送信しない。
+- **完全クライアントサイド処理**: 画像のピクセル解析はすべてユーザーのローカルブラウザ内（Service Worker の OffscreenCanvas）で完結し、画像バイナリを外部サーバーに送信しない。
+- **過剰負荷・アクセス遮断防止の徹底**: X側からレートリミット（429）やボット判定を受けないよう、ページ外へのスクレイピング/巡回通信を禁止し、DOM上の描画情報とJev判定API通信のみに限定。
+
