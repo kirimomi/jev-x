@@ -1,0 +1,29 @@
+{
+  "name": "jev-x",
+  "version": "0.1.0",
+  "description": "Jev-powered real-time personalized content filter for X (Twitter)",
+  "type": "module",
+  "scripts": {
+    "test:filter": "tsx scripts/test-filter.ts",
+    "test:filter:mock": "tsx scripts/test-filter.ts --mock",
+    "build": "tsc"
+  },
+  "keywords": [
+    "jev",
+    "twitter",
+    "chrome-extension",
+    "content-filter",
+    "ai"
+  ],
+  "author": "kirimomi",
+  "license": "MIT",
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
