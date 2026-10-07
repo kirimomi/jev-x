@@ -1,0 +1,108 @@
+/* jev-x Content Filter UI Styles */
+
+.jev-filtered-wrapper {
+  position: relative;
+  transition: all 0.25s ease-in-out;
+}
+
+/* Compact filter header banner */
+.jev-filter-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  margin: 4px 8px;
+  background: rgba(29, 155, 240, 0.08);
+  border: 1px solid rgba(29, 155, 240, 0.25);
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #71767b;
+  backdrop-filter: blur(4px);
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.jev-filter-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.jev-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #1d9bf0;
+  white-space: nowrap;
+}
+
+.jev-filter-desc {
+  color: #71767b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jev-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.jev-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(113, 118, 123, 0.4);
+  color: #e7e9ea;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.jev-toggle-btn:hover {
+  background: rgba(239, 243, 244, 0.1);
+  border-color: rgba(239, 243, 244, 0.6);
+  color: #ffffff;
+}
+
+/* Light mode support */
+@media (prefers-color-scheme: light) {
+  .jev-filter-banner {
+    background: #f7f9f9;
+    border-color: #cfd9de;
+    color: #536471;
+  }
+  .jev-filter-badge {
+    color: #1d9bf0;
+  }
+  .jev-filter-desc {
+    color: #536471;
+  }
+  .jev-toggle-btn {
+    border-color: #cfd9de;
+    color: #0f1419;
+  }
+  .jev-toggle-btn:hover {
+    background: #eff3f4;
+    border-color: #536471;
+  }
+}
+
+/* Post folding state */
+.jev-post-folded {
+  display: none !important;
+}
+
+.jev-post-unfolded {
+  display: block !important;
+  opacity: 0.95;
+}

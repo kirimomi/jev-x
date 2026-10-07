@@ -6,7 +6,8 @@
   "scripts": {
     "test:filter": "tsx scripts/test-filter.ts",
     "test:filter:mock": "tsx scripts/test-filter.ts --mock",
-    "build": "tsc"
+    "build:ext": "vite build",
+    "build": "tsc && vite build"
   },
   "keywords": [
     "jev",
@@ -21,9 +22,11 @@
     "@typesafe-ai/sdk": "^0.6.0"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.4",
     "@types/node": "^22.0.0",
     "dotenv": "^16.4.5",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vite": "^8.3.3"
   }
 }

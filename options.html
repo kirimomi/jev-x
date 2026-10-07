@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>jev-x 設定</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card-bg: #16181c;
+      --text: #e7e9ea;
+      --text-muted: #71767b;
+      --primary: #1d9bf0;
+      --primary-hover: #1a8cd8;
+      --border: #2f3336;
+      --border-light: #3e4144;
+      --success: #00ba7c;
+    }
+    body {
+      margin: 0;
+      padding: 32px 16px;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    p.subtitle {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    input[type="password"], input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      background: #202327;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: var(--primary-hover);
+    }
+    .category-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .category-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: #202327;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      gap: 16px;
+    }
+    .category-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .category-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .category-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .slider-group input[type="range"] {
+      width: 80px;
+      accent-color: var(--primary);
+    }
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #3e4144;
+      transition: .25s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    #status-msg {
+      display: none;
+      padding: 10px 14px;
+      background: rgba(0, 186, 124, 0.15);
+      border: 1px solid var(--success);
+      color: var(--success);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛡️ jev-x 設定</h1>
+      <p class="subtitle">Jev (TypeSafe AI) によるXタイムラインのコンテンツフィルタリング</p>
+    </header>
+
+    <div id="status-msg">設定を保存しました。</div>
+
+    <div class="card">
+      <h2 class="card-title">🔑 API設定</h2>
+      <div class="form-group">
+        <label for="api-key">TypeSafe AI API Key</label>
+        <input type="password" id="api-key" placeholder="ts_********************************" autocomplete="off" />
+        <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0 0 0;">
+          ※キーはブラウザのローカルストレージ（chrome.storage.local）にのみ保存され、外部には送信されません。
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>🛡️ フィルタ対象カテゴリ</span>
+        <button id="save-all-btn" class="btn">設定を保存</button>
+      </div>
+      <div class="category-list" id="category-list">
+        <!-- Rendered by options.ts -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/extension/options/options.ts"></script>
+</body>
+</html>
