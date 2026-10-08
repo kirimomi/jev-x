@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         options: resolve(__dirname, 'options.html'),
         popup: resolve(__dirname, 'popup.html'),
+        offscreen: resolve(__dirname, 'offscreen.html'),
       },
       output: {
         entryFileNames: (chunkInfo) => {

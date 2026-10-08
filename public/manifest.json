@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Jev-powered real-time personalized content filter for X (Twitter)",
   "permissions": [
-    "storage"
+    "storage",
+    "offscreen"
   ],
   "host_permissions": [
     "https://x.com/*",

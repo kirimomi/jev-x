@@ -19,7 +19,9 @@
   "author": "kirimomi",
   "license": "MIT",
   "dependencies": {
-    "@typesafe-ai/sdk": "^0.6.0"
+    "@tensorflow/tfjs": "^4.22.0",
+    "@typesafe-ai/sdk": "^0.6.0",
+    "nsfwjs": "^4.3.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.4",

@@ -9,47 +9,56 @@ let currentSettings: UserFilterSettings = getDefaultUserSettings();
 let currentApiKey: string | undefined = undefined;
 
 // In-memory cache for analyzed image URLs to completely avoid duplicate network requests
-const imageScoreCache = new Map<string, number>();
+const imageScoreCache = new Map<string, any>();
 
-/**
- * Fetches image in background (with extension host_permissions), draws to OffscreenCanvas,
- * and analyzes skin exposure ratio without CORS restrictions.
- */
-async function analyzeImageFromUrl(url: string): Promise<number> {
-  if (!url || typeof url !== 'string') return 0;
+let creatingOffscreen: Promise<void> | null = null;
+
+async function setupOffscreenDocument(path: string) {
+  const url = chrome.runtime.getURL(path);
+  // Type fallback if getContexts is not fully typed
+  if ('getContexts' in chrome.runtime) {
+    const contexts = await (chrome.runtime as any).getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [url]
+    });
+    if (contexts.length > 0) return;
+  }
+
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+  } else {
+    creatingOffscreen = (chrome.offscreen as any).createDocument({
+      url: path,
+      reasons: ['WORKERS'], // offscreen reason
+      justification: 'Run NSFWJS image classification',
+    });
+    await creatingOffscreen;
+    creatingOffscreen = null;
+  }
+}
+
+async function analyzeImageFromUrl(url: string): Promise<any> {
+  if (!url || typeof url !== 'string') return null;
 
   if (imageScoreCache.has(url)) {
     return imageScoreCache.get(url)!;
   }
 
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      imageScoreCache.set(url, 0);
-      return 0;
+    await setupOffscreenDocument('offscreen.html');
+    const res = await chrome.runtime.sendMessage({
+      type: 'OFFSCREEN_ANALYZE_IMAGE',
+      url
+    });
+    
+    if (res?.predictions) {
+      imageScoreCache.set(url, res.predictions);
+      return res.predictions;
     }
-    const blob = await res.blob();
-    const imageBitmap = await createImageBitmap(blob);
-
-    const size = 64;
-    const canvas = new OffscreenCanvas(size, size);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      imageBitmap.close();
-      return 0;
-    }
-
-    ctx.drawImage(imageBitmap, 0, 0, size, size);
-    imageBitmap.close();
-
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const score = analyzeRgbaPixels(imageData.data, size * size);
-    imageScoreCache.set(url, score);
-    return score;
+    return null;
   } catch (err) {
     console.warn('[jev-x background] Failed to analyze image:', url, err);
-    imageScoreCache.set(url, 0);
-    return 0;
+    return null;
   }
 }
 
