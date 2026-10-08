@@ -11,11 +11,7 @@ export default defineConfig({
         popup: resolve(__dirname, 'popup.html'),
       },
       output: {
-        entryFileNames: (chunkInfo) => {
-          if (chunkInfo.name === 'content') return 'content.js';
-          if (chunkInfo.name === 'background') return 'background.js';
-          return '[name].js';
-        },
+        entryFileNames: '[name].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {

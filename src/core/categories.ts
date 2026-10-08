@@ -114,5 +114,6 @@ export function getDefaultUserSettings(): UserFilterSettings {
     showDebugBadges: true,
     showFoldBanner: true,
     requireMediaForAdult: false, // by default allow user to toggle
+    settingsVersion: 2,
   };
 }

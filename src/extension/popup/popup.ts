@@ -1,4 +1,8 @@
-import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest } from '../messages.js';
+import {
+  GetSettingsRequest,
+  GetSettingsResponse,
+  PatchSettingsRequest,
+} from '../messages.js';
 
 const globalToggle = document.getElementById('global-toggle') as HTMLInputElement;
 const apiStatusBadge = document.getElementById('api-status')!;
@@ -15,12 +19,11 @@ async function initPopup() {
       if (badgeToggle) {
         badgeToggle.checked = res.settings.showDebugBadges !== false;
         badgeToggle.addEventListener('change', async () => {
-          res.settings.showDebugBadges = badgeToggle.checked;
-          const saveReq: SaveSettingsRequest = {
-            type: 'SAVE_SETTINGS',
-            settings: res.settings,
+          const patchReq: PatchSettingsRequest = {
+            type: 'PATCH_SETTINGS',
+            patch: { showDebugBadges: badgeToggle.checked },
           };
-          await chrome.runtime.sendMessage(saveReq);
+          await chrome.runtime.sendMessage(patchReq);
         });
       }
 
@@ -28,12 +31,11 @@ async function initPopup() {
       if (foldBannerToggle) {
         foldBannerToggle.checked = res.settings.showFoldBanner !== false;
         foldBannerToggle.addEventListener('change', async () => {
-          res.settings.showFoldBanner = foldBannerToggle.checked;
-          const saveReq: SaveSettingsRequest = {
-            type: 'SAVE_SETTINGS',
-            settings: res.settings,
+          const patchReq: PatchSettingsRequest = {
+            type: 'PATCH_SETTINGS',
+            patch: { showFoldBanner: foldBannerToggle.checked },
           };
-          await chrome.runtime.sendMessage(saveReq);
+          await chrome.runtime.sendMessage(patchReq);
         });
       }
 
@@ -46,12 +48,11 @@ async function initPopup() {
       }
 
       globalToggle.addEventListener('change', async () => {
-        res.settings.globalEnabled = globalToggle.checked;
-        const saveReq: SaveSettingsRequest = {
-          type: 'SAVE_SETTINGS',
-          settings: res.settings,
+        const patchReq: PatchSettingsRequest = {
+          type: 'PATCH_SETTINGS',
+          patch: { globalEnabled: globalToggle.checked },
         };
-        await chrome.runtime.sendMessage(saveReq);
+        await chrome.runtime.sendMessage(patchReq);
       });
     }
   } catch (error) {
