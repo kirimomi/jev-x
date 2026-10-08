@@ -27,11 +27,9 @@ export interface TweetData {
   id: string;
   authorUsername: string;
   authorName?: string;
-  authorBio?: string;
   text: string;
   ogp?: OgpCardInfo;
   imageAlts?: string[];
-  imageUrls?: string[];
   isReply?: boolean;
   hasSensitiveWarning?: boolean;
   vision?: ImageVisionResult;
@@ -89,6 +87,8 @@ export interface UserFilterSettings {
   showFoldBanner: boolean;
   /** If true, posts without media (no images/cards/sensitive flags) will NOT be filtered as adult_nsfw */
   requireMediaForAdult: boolean;
+  /** Schema version for settings persistence & migration */
+  settingsVersion?: number;
 }
 
 /**
@@ -110,7 +110,7 @@ export interface FilterDecision {
   primaryReason?: CategoryId;
   primaryProbability?: number;
   matchedCategories: CategoryScoreResult[];
-  allScores?: Record<string, number>;
+  allScores?: Partial<Record<CategoryId, number>>;
   visionResult?: ImageVisionResult;
   evaluatedAt: number; // timestamp
   latencyMs: number;

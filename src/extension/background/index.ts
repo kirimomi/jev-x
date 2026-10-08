@@ -4,12 +4,45 @@ import { analyzeRgbaPixels } from '../../core/visionAnalyzer.js';
 import { UserFilterSettings, CategoryId } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
 
+import { normalizeSettings } from '../../core/settings.js';
+
 let filterEngine: FilterEngine | null = null;
 let currentSettings: UserFilterSettings = getDefaultUserSettings();
 let currentApiKey: string | undefined = undefined;
+let initPromise: Promise<void> | null = null;
 
-// In-memory cache for analyzed image URLs to completely avoid duplicate network requests
+// Bounded in-memory cache for analyzed image URLs (max 500 entries) to avoid duplicate network requests
+const MAX_IMAGE_CACHE_ENTRIES = 500;
 const imageScoreCache = new Map<string, number>();
+
+function cacheImageScore(url: string, score: number): void {
+  if (imageScoreCache.size >= MAX_IMAGE_CACHE_ENTRIES) {
+    const oldestKey = imageScoreCache.keys().next().value;
+    if (oldestKey) imageScoreCache.delete(oldestKey);
+  }
+  imageScoreCache.set(url, score);
+}
+
+/**
+ * Broadcast updated settings to all open x.com / twitter.com tabs
+ */
+async function broadcastSettings(settings: UserFilterSettings): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] });
+    for (const tab of tabs) {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'SETTINGS_UPDATED',
+          settings,
+        }).catch(() => {
+          // Tab may not have content script loaded or ready; ignore
+        });
+      }
+    }
+  } catch (err) {
+    console.debug('[jev-x background] Tab broadcast notice:', err);
+  }
+}
 
 /**
  * Fetches image in background (with extension host_permissions), draws to OffscreenCanvas,
@@ -25,7 +58,6 @@ async function analyzeImageFromUrl(url: string): Promise<number> {
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      imageScoreCache.set(url, 0);
       return 0;
     }
     const blob = await res.blob();
@@ -44,38 +76,30 @@ async function analyzeImageFromUrl(url: string): Promise<number> {
 
     const imageData = ctx.getImageData(0, 0, size, size);
     const score = analyzeRgbaPixels(imageData.data, size * size);
-    imageScoreCache.set(url, score);
+    cacheImageScore(url, score);
     return score;
   } catch (err) {
     console.warn('[jev-x background] Failed to analyze image:', url, err);
-    imageScoreCache.set(url, 0);
     return 0;
   }
 }
 
-async function initEngine() {
+async function initEngine(): Promise<void> {
   const data = await chrome.storage.local.get(['userSettings', 'typesafeApiKey']);
   if (data.userSettings) {
-    const stored = data.userSettings as Partial<UserFilterSettings>;
-    const defaultSettings = getDefaultUserSettings();
-    const mergedCategories = { ...defaultSettings.categories };
-    if (stored.categories) {
-      for (const [key, conf] of Object.entries(stored.categories)) {
-        const catId = key as CategoryId;
-        if (mergedCategories[catId]) {
-          mergedCategories[catId] = {
-            enabled: conf.enabled,
-            threshold: conf.threshold >= 0.7 ? 0.5 : conf.threshold,
-          };
-        }
-      }
+    const raw = data.userSettings;
+    const normalized = normalizeSettings(raw);
+    currentSettings = normalized;
+
+    // If legacy settings were migrated, persist the normalized settings back
+    const rawObj = raw as Record<string, any>;
+    if (typeof raw === 'object' && raw !== null && (!('settingsVersion' in rawObj) || rawObj.settingsVersion < 2)) {
+      await chrome.storage.local.set({ userSettings: normalized });
     }
-    currentSettings = {
-      ...defaultSettings,
-      ...stored,
-      categories: mergedCategories,
-    };
+  } else {
+    currentSettings = getDefaultUserSettings();
   }
+
   if (data.typesafeApiKey) {
     currentApiKey = data.typesafeApiKey as string;
   }
@@ -88,16 +112,27 @@ async function initEngine() {
   console.log('[jev-x background] Initialized engine, mockMode:', !currentApiKey, 'showBadges:', currentSettings.showDebugBadges);
 }
 
+function ensureEngine(): Promise<void> {
+  if (!initPromise) {
+    initPromise = initEngine();
+  }
+  return initPromise;
+}
+
 // Initial setup
-initEngine();
+ensureEngine();
 
 // Handle messages from content script or options page
-chrome.runtime.onMessage.addListener((message: ExtensionRequest, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendResponse) => {
   (async () => {
     try {
-      if (!filterEngine) {
-        await initEngine();
+      // Validate sender identity
+      if (sender.id !== chrome.runtime?.id) {
+        sendResponse({ error: 'Unauthorized sender' });
+        return;
       }
+
+      await ensureEngine();
 
       switch (message.type) {
         case 'EVALUATE_TWEETS': {
@@ -110,48 +145,86 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, _sender, sendRe
           break;
         }
 
-      case 'GET_SETTINGS': {
-        sendResponse({
-          settings: currentSettings,
-          hasApiKey: Boolean(currentApiKey),
-        });
-        break;
-      }
-
-      case 'SAVE_SETTINGS': {
-        currentSettings = message.settings;
-        const toSave: Record<string, any> = { userSettings: message.settings };
-
-        if (message.apiKey !== undefined) {
-          currentApiKey = message.apiKey;
-          toSave.typesafeApiKey = message.apiKey;
+        case 'GET_SETTINGS': {
+          sendResponse({
+            settings: currentSettings,
+            hasApiKey: Boolean(currentApiKey),
+          });
+          break;
         }
 
-        await chrome.storage.local.set(toSave);
+        case 'SAVE_SETTINGS': {
+          // Verify that SAVE_SETTINGS originates only from extension UI pages (popup/options), not content script
+          const isFromExtensionPage = !sender.tab || Boolean(sender.url?.startsWith('chrome-extension://'));
+          if (!isFromExtensionPage) {
+            sendResponse({ error: 'Unauthorized: SAVE_SETTINGS is only permitted from extension pages' });
+            return;
+          }
 
-        // Re-initialize engine with updated key
-        filterEngine = new FilterEngine({
-          apiKey: currentApiKey,
-          mockMode: !currentApiKey,
-        });
+          const normalized = normalizeSettings(message.settings);
+          currentSettings = normalized;
+          const toSave: Record<string, any> = { userSettings: normalized };
 
-        sendResponse({ success: true });
-        break;
+          if (message.apiKey !== undefined) {
+            currentApiKey = message.apiKey;
+            toSave.typesafeApiKey = message.apiKey;
+          }
+
+          await chrome.storage.local.set(toSave);
+
+          // Re-initialize engine with updated key
+          filterEngine = new FilterEngine({
+            apiKey: currentApiKey,
+            mockMode: !currentApiKey,
+          });
+
+          await broadcastSettings(currentSettings);
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'PATCH_SETTINGS': {
+          const isFromExtensionPage = !sender.tab || Boolean(sender.url?.startsWith('chrome-extension://'));
+          if (!isFromExtensionPage) {
+            sendResponse({ error: 'Unauthorized: PATCH_SETTINGS is only permitted from extension pages' });
+            return;
+          }
+
+          const merged = {
+            ...currentSettings,
+            ...message.patch,
+            categories: {
+              ...currentSettings.categories,
+              ...(message.patch.categories || {}),
+            },
+          };
+          const normalized = normalizeSettings(merged);
+          currentSettings = normalized;
+          await chrome.storage.local.set({ userSettings: normalized });
+          await broadcastSettings(currentSettings);
+          sendResponse({ settings: currentSettings });
+          break;
+        }
+
+        case 'ANALYZE_IMAGE_URL': {
+          // Restrict image fetching only to legitimate Twitter/X media CDNs
+          if (!message.url || !message.url.startsWith('https://pbs.twimg.com/')) {
+            sendResponse({ error: 'Unauthorized: ANALYZE_IMAGE_URL only allows https://pbs.twimg.com/' });
+            return;
+          }
+
+          const score = await analyzeImageFromUrl(message.url);
+          sendResponse({ score });
+          break;
+        }
+
+        default:
+          sendResponse({ error: 'Unknown request type' });
       }
-
-      case 'ANALYZE_IMAGE_URL': {
-        const score = await analyzeImageFromUrl(message.url);
-        sendResponse({ score });
-        break;
-      }
-
-      default:
-        sendResponse({ error: 'Unknown request type' });
+    } catch (err) {
+      console.error('[jev-x background] Message processing error:', err);
+      sendResponse({ error: String(err) });
     }
-  } catch (err) {
-    console.error('[jev-x background] Message processing error:', err);
-    sendResponse({ error: String(err) });
-  }
   })();
 
   return true; // Keep message channel open for async response

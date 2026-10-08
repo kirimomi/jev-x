@@ -4,9 +4,10 @@ import {
   CategoryId,
   UserFilterSettings,
   FilterDecision,
-  CategoryScoreResult,
 } from '../types/index.js';
 import { CATEGORY_MAP } from './categories.js';
+import { mockEvaluate } from './mockEvaluator.js';
+import { decide, createUnfilteredDecision } from './decision.js';
 
 export interface FilterEngineOptions {
   apiKey?: string;
@@ -23,10 +24,6 @@ export function buildTweetState(tweet: TweetData): string {
     ? `[投稿者]: ${tweet.authorName} (@${tweet.authorUsername})`
     : `[投稿者]: @${tweet.authorUsername}`;
   parts.push(authorPart);
-
-  if (tweet.authorBio) {
-    parts.push(`[投稿者のプロフィール (BIO)]:\n${tweet.authorBio}`);
-  }
 
   if (tweet.isReply) {
     parts.push(`[投稿種別]: 他ユーザーへの返信 (リプライ)`);
@@ -58,99 +55,11 @@ export function buildTweetState(tweet: TweetData): string {
   return parts.join('\n\n');
 }
 
-/**
- * Mock evaluation for local testing without spending API credits
- */
-function mockEvaluate(
-  tweet: TweetData,
-  activeCategoryIds: CategoryId[]
-): Record<CategoryId, number> {
-  const scores: Record<CategoryId, number> = {} as Record<CategoryId, number>;
-  const text = (
-    tweet.text +
-    ' ' +
-    (tweet.authorBio || '') +
-    ' ' +
-    (tweet.ogp?.title || '') +
-    ' ' +
-    (tweet.ogp?.description || '') +
-    ' ' +
-    (tweet.ogp?.domain || '')
-  ).toLowerCase();
-
-  for (const catId of activeCategoryIds) {
-    scores[catId] = 0.05; // baseline low probability
-  }
-
-  if (activeCategoryIds.includes('adult_nsfw')) {
-    if (tweet.hasSensitiveWarning || tweet.vision?.isLikelyNsfw) {
-      scores['adult_nsfw'] = 0.98;
-    } else if (text.includes('裏垢') || text.includes('オナ') || text.includes('エロ') || text.includes('nsfw') || text.includes('パパ活') || text.includes('マン凸') || text.includes('巨乳') || text.includes('無修正') || text.includes('出会い') || text.includes('サブスク') || text.includes('オナレコ') || text.includes('凸') || text.includes('p活') || text.includes('18禁') || text.includes('ファンティア') || text.includes('fantia') || text.includes('myfans') || text.includes('onlyfans')) {
-      scores['adult_nsfw'] = 0.95;
-    }
-  }
-
-  if (activeCategoryIds.includes('ai_slop')) {
-    if (text.includes('ai美女') || text.includes('chatgpt') || text.includes('gpt') || text.includes('ai生成') || text.includes('slop') || text.includes('midjourney') || text.includes('プロンプト') || text.includes('画像生成') || text.includes('自動化') || text.includes('量産') || text.includes('生成ai')) {
-      scores['ai_slop'] = 0.92;
-    }
-  }
-
-  if (activeCategoryIds.includes('impression_zombie')) {
-    if (tweet.isReply && (tweet.text.length < 15 || /^[\p{Emoji}\s]+$/u.test(tweet.text) || /[\u0600-\u06FF]/.test(tweet.text) || /^(nice|great|good|wow|cool|awesome|lol)/i.test(tweet.text))) {
-      scores['impression_zombie'] = 0.96;
-    }
-  }
-
-  if (activeCategoryIds.includes('thread_bait')) {
-    if (text.includes('最後にとんでもない') || text.includes('続きはツリー') || text.includes('プロフへ') || text.includes('👇') || text.includes('1/') || text.includes('ツリー') || text.includes('リプ欄') || text.includes('保存') || text.includes('ブクマ') || text.includes('まとめました') || text.includes('選') || text.includes('知らなきゃ損')) {
-      scores['thread_bait'] = 0.88;
-    }
-  }
-
-  if (activeCategoryIds.includes('scam_hustle')) {
-    if (text.includes('月100万') || text.includes('brain') || text.includes('プレゼント企画') || text.includes('プロンプト配布') || text.includes('誰でも稼げる') || text.includes('副業') || text.includes('無料配布') || text.includes('フォロワー限定') || text.includes('tips') || text.includes('不労所得') || text.includes('完全自動')) {
-      scores['scam_hustle'] = 0.94;
-    }
-  }
-
-  if (activeCategoryIds.includes('rage_bait')) {
-    if (text.includes('男はこれだから') || text.includes('女の敵') || text.includes('z世代') || text.includes('民度') || text.includes('害悪') || text.includes('炎上') || text.includes('フェミ') || text.includes('弱男') || text.includes('晒し') || text.includes('クソリプ') || text.includes('老害')) {
-      scores['rage_bait'] = 0.89;
-    }
-  }
-
-  if (activeCategoryIds.includes('toxic_venting')) {
-    if (text.includes('死ね') || text.includes('ゴミすぎる') || text.includes('消えろ') || text.includes('クソが') || text.includes('最悪') || text.includes('ウザい') || text.includes('イライラ') || text.includes('鬱')) {
-      scores['toxic_venting'] = 0.91;
-    }
-  }
-
-  if (activeCategoryIds.includes('preachy_guru')) {
-    if (text.includes('優秀な人ほど') || text.includes('残酷な真実') || text.includes('30代で気づいたこと') || text.includes('本質') || text.includes('思考法') || text.includes('成功者') || text.includes('習慣')) {
-      scores['preachy_guru'] = 0.86;
-    }
-  }
-
-  if (activeCategoryIds.includes('affiliate_spam')) {
-    if (text.includes('セールでこれだけは買え') || text.includes('リプ欄にお得') || text.includes('amzn.to') || text.includes('amazon') || text.includes('クーポン') || text.includes('ポイント還元') || text.includes('楽天')) {
-      scores['affiliate_spam'] = 0.93;
-    }
-  }
-
-  if (activeCategoryIds.includes('spoilers')) {
-    if (text.includes('の結末') || text.includes('が死亡') || text.includes('ネタバレ') || text.includes('ラストシーン')) {
-      scores['spoilers'] = 0.90;
-    }
-  }
-
-  return scores;
-}
-
 export class FilterEngine {
   private client: TypeSafeClient | null = null;
   private mockMode: boolean;
-  private cache = new Map<string, FilterDecision>();
+  // Cache raw evaluated scores keyed by composite state hash (tweet.id + state signature)
+  private scoreCache = new Map<string, Record<CategoryId, number>>();
 
   constructor(options: FilterEngineOptions = {}) {
     this.mockMode = Boolean(options.mockMode || !options.apiKey);
@@ -163,6 +72,16 @@ export class FilterEngine {
   }
 
   /**
+   * Generates a composite cache key that changes when media or late-loaded content appears
+   */
+  private getCacheKey(tweet: TweetData): string {
+    const imgCount = tweet.vision?.imageCount ?? (tweet.imageAlts?.length ?? 0);
+    const hasWarn = tweet.hasSensitiveWarning ? '1' : '0';
+    const exp = tweet.vision?.exposureScore ?? 0;
+    return `${tweet.id}:${imgCount}:${hasWarn}:${exp}`;
+  }
+
+  /**
    * Evaluates a single tweet against user filter settings
    */
   async evaluateTweet(
@@ -170,139 +89,96 @@ export class FilterEngine {
     settings: UserFilterSettings
   ): Promise<FilterDecision> {
     if (!settings.globalEnabled) {
-      return {
-        tweetId: tweet.id,
-        shouldFilter: false,
-        matchedCategories: [],
-        evaluatedAt: Date.now(),
-        latencyMs: 0,
-      };
-    }
-
-    // Check memory cache
-    const cached = this.cache.get(tweet.id);
-    if (cached) {
-      return cached;
+      return createUnfilteredDecision(tweet.id, 0, tweet.vision);
     }
 
     const startTime = performance.now();
+    const cacheKey = this.getCacheKey(tweet);
+    let categoryScores = this.scoreCache.get(cacheKey);
 
-    // Collect active categories
-    const activeCategoryIds = (Object.keys(settings.categories) as CategoryId[]).filter(
-      (catId) => settings.categories[catId]?.enabled
-    );
+    if (!categoryScores) {
+      // Collect active categories
+      const activeCategoryIds = (Object.keys(settings.categories) as CategoryId[]).filter(
+        (catId) => settings.categories[catId]?.enabled
+      );
 
-    if (activeCategoryIds.length === 0) {
-      return {
-        tweetId: tweet.id,
-        shouldFilter: false,
-        matchedCategories: [],
-        evaluatedAt: Date.now(),
-        latencyMs: 0,
-      };
-    }
-
-    const state = buildTweetState(tweet);
-    let categoryScores: Record<CategoryId, number>;
-
-    if (this.mockMode || !this.client) {
-      categoryScores = mockEvaluate(tweet, activeCategoryIds);
-    } else {
-      // Build Jev questions object
-      const questions: Record<string, NoulQuestion> = {};
-      for (const catId of activeCategoryIds) {
-        const catDef = CATEGORY_MAP.get(catId);
-        if (catDef) {
-          questions[catId] = noul(catDef.instruction);
-        }
+      if (activeCategoryIds.length === 0) {
+        return createUnfilteredDecision(tweet.id, 0, tweet.vision);
       }
 
-      try {
-        const response = await this.client.systemOne({
-          state,
-          questions,
-        });
-
-        categoryScores = {} as Record<CategoryId, number>;
+      if (this.mockMode || !this.client) {
+        categoryScores = mockEvaluate(tweet, activeCategoryIds);
+        this.scoreCache.set(cacheKey, categoryScores);
+      } else {
+        const state = buildTweetState(tweet);
+        const questions: Record<string, NoulQuestion> = {};
         for (const catId of activeCategoryIds) {
-          const ans = response.answers[catId];
-          categoryScores[catId] = ans?.type === 'noul' ? ans.noul : 0;
+          const catDef = CATEGORY_MAP.get(catId);
+          if (catDef) {
+            questions[catId] = noul(catDef.instruction);
+          }
         }
-      } catch (error) {
-        console.error(`[FilterEngine] Jev API error for tweet ${tweet.id}:`, error);
-        // Fallback to safe
-        return {
-          tweetId: tweet.id,
-          shouldFilter: false,
-          matchedCategories: [],
-          evaluatedAt: Date.now(),
-          latencyMs: Math.round(performance.now() - startTime),
-        };
-      }
-    }
 
-    const matchedCategories: CategoryScoreResult[] = [];
-    let primaryReason: CategoryId | undefined;
-    let highestProbability = -1;
+        try {
+          // Timeout after 8 seconds for remote API
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Jev API timeout')), 8000)
+          );
 
-    const hasMedia = Boolean(
-      tweet.hasSensitiveWarning ||
-      (tweet.vision && tweet.vision.hasImages && tweet.vision.imageCount > 0) ||
-      (tweet.imageAlts && tweet.imageAlts.length > 0)
-    );
+          const response = await Promise.race([
+            this.client.systemOne({ state, questions }),
+            timeoutPromise,
+          ]);
 
-    for (const catId of activeCategoryIds) {
-      // If user enabled "requireMediaForAdult", ignore adult_nsfw for text-only posts
-      if (catId === 'adult_nsfw' && settings.requireMediaForAdult && !hasMedia) {
-        continue;
-      }
-
-      const prob = categoryScores[catId] ?? 0;
-      const threshold = settings.categories[catId]?.threshold ?? 0.7;
-      const isMatched = prob >= threshold;
-
-      if (isMatched) {
-        matchedCategories.push({
-          categoryId: catId,
-          probability: prob,
-          matched: true,
-          threshold,
-        });
-
-        if (prob > highestProbability) {
-          highestProbability = prob;
-          primaryReason = catId;
+          categoryScores = {} as Record<CategoryId, number>;
+          for (const catId of activeCategoryIds) {
+            const ans = response.answers[catId];
+            categoryScores[catId] = ans?.type === 'noul' ? ans.noul : 0;
+          }
+          this.scoreCache.set(cacheKey, categoryScores);
+        } catch (error) {
+          console.error(`[FilterEngine] Jev API error for tweet ${tweet.id}:`, error);
+          return createUnfilteredDecision(
+            tweet.id,
+            Math.round(performance.now() - startTime),
+            tweet.vision
+          );
         }
       }
     }
 
-    const decision: FilterDecision = {
-      tweetId: tweet.id,
-      shouldFilter: matchedCategories.length > 0,
-      primaryReason,
-      primaryProbability: primaryReason ? highestProbability : undefined,
-      matchedCategories,
-      allScores: categoryScores,
-      visionResult: tweet.vision,
-      evaluatedAt: Date.now(),
-      latencyMs: Math.round(performance.now() - startTime),
-    };
-
-    this.cache.set(tweet.id, decision);
-    return decision;
+    const latencyMs = Math.round(performance.now() - startTime);
+    return decide(categoryScores, tweet, settings, latencyMs);
   }
 
   /**
-   * Batch evaluate multiple tweets in parallel
+   * Batch evaluate multiple tweets with concurrency limit (semaphore of 4)
    */
   async evaluateBatch(
     tweets: TweetData[],
-    settings: UserFilterSettings
+    settings: UserFilterSettings,
+    concurrency = 4
   ): Promise<FilterDecision[]> {
-    return Promise.all(tweets.map((t) => this.evaluateTweet(t, settings)));
+    const results: FilterDecision[] = new Array(tweets.length);
+    let currentIndex = 0;
+
+    const worker = async () => {
+      while (currentIndex < tweets.length) {
+        const idx = currentIndex++;
+        results[idx] = await this.evaluateTweet(tweets[idx], settings);
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(concurrency, tweets.length) },
+      () => worker()
+    );
+
+    await Promise.all(workers);
+    return results;
   }
 
   clearCache(): void {
-    this.cache.clear();
+    this.scoreCache.clear();
   }
 }
