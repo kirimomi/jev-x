@@ -14,6 +14,7 @@
 
 ### 1.2 技術スタック
 - **判定エンジン**: Jev (TypeSafe AI) API (`@typesafe-ai/sdk`)
+- **画像解析エンジン**: TensorFlow.js / nsfwjs (Offscreen Document上でクライアントサイド推論。ファイルサイズが大きいため専用のバンドル・ワーカー環境に隔離)
 - **ブラウザ拡張機能 (PC)**: Chrome Extension (Manifest V3, TypeScript, Vite)
 - **UI/スタイリング**: Vanilla CSS (ゼロ依存・超軽量)
 - **ストレージ/キャッシュ**: `chrome.storage.local`（設定永続化）/ インメモリ合成キー・スコアキャッシュ / Bounded LRU画像キャッシュ
