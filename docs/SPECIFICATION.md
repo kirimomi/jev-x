@@ -15,9 +15,9 @@
 ### 1.2 技術スタック
 - **判定エンジン**: Jev (TypeSafe AI) API (`@typesafe-ai/sdk`)
 - **ブラウザ拡張機能 (PC)**: Chrome Extension (Manifest V3, TypeScript, Vite)
-- **UI/スタイリング**: Vanilla CSS / Tailwind CSS (軽量重視)
-- **ストレージ/キャッシュ**: `chrome.storage.local` / `IndexedDB`
-- **モバイル展開**: WebExtension Polyfill (iOS Safari機能拡張 / Android Firefox・Kiwi)
+- **UI/スタイリング**: Vanilla CSS (ゼロ依存・超軽量)
+- **ストレージ/キャッシュ**: `chrome.storage.local`（設定永続化）/ インメモリ合成キー・スコアキャッシュ / Bounded LRU画像キャッシュ
+- **テスト・品質管理**: Vitest, happy-dom, ESLint (コア純粋性ガード), TypeScript strict mode
 
 ---
 
@@ -87,15 +87,22 @@ const state = parts.join('\n\n');
   3. **インスペクション / デバッグバッジ (Inspect Badge)**:
      - すべてのポスト（SAFE含む）に、判定結果（SAFE / カテゴリ名 / 確信度 / 応答速度 / 画像露出度 `[📷 露出 XX%]` / `[⚠️ X警告]`）をコンパクトにリアルタイム表示。設定画面・PopupからON/OFF可能。
 
-### 4.2 Background Service Worker & 画像露出解析 (Vision Analyzer)
+### 4.2 Background Service Worker & 判定・画像露出解析
+- **同時実行数制御 (Concurrency Limiter) & タイムアウト**:
+  - Jev APIリクエストは最大4並列のセマフォワーカーで処理し、ブラウザおよびAPIエンドポイントの飽和を防止。
+  - リモートAPI呼び出しは8秒タイムアウトガードを備え、タイムアウト時は安全に未フィルタ決定（フェイルオープン）へフォールバック。
+- **合成キーによるスコアキャッシュ & 即時設定再反映**:
+  - `tweetId + 画像数 + 警告フラグ + 露出度` の合成キーでカテゴリ別生スコアをキャッシュ。遅延ロードで画像が追加された際はキャッシュが再評価され、設定変更時はJev APIを再呼び出しすることなく手元で即座に再判定。
 - **CORS回避・画像肌色露出度アナライザー (`visionAnalyzer.ts`)**:
   - Content Script 内での Canvas Tainted（CORS制限）を回避するため、拡張機能の権限（`host_permissions: ["https://pbs.twimg.com/*"]`）を持つ Service Worker 側で画像を `fetch`。
   - `OffscreenCanvas`（64×64ピクセル）にダウンサンプリング展開し、YCbCr 色空間による肌色露出面積比率をサブミリ秒（< 1ms）で高速計算。
-  - **画像URLキャッシュ (`imageScoreCache`)**: 同一の画像URLに対する二重フェッチを完全防止。
+  - **有界画像URLキャッシュ (`imageScoreCache`)**: 最大500エントリのLRUキャッシュで同一画像の二重フェッチを防止。一時的失敗時は0をキャッシュせずリトライ可能。
 - **レートリミット保護・安全方針**:
   - Xのサーバーへ過度な負荷をかけないため、外部ユーザーページへの個別リクエスト（プロフィール巡回等）は一切行わず、**ブラウザのDOM内にすでに読み込まれているデータのみ**で判定を完結。
 - **拡張機能リロード時の切断保護**:
   - `chrome.runtime?.id` を監視し、拡張機能の更新時（`Extension context invalidated`）に安全に監視を切断・エラーを握り潰し、タブのフリーズやクラッシュを防止。
+- **メッセージセキュリティ**:
+  - 送信元 `sender.id` の拡張機能ID検証、`SAVE_SETTINGS`/`PATCH_SETTINGS` のタブ発信拒否（拡張ページのみ許可）、および `ANALYZE_IMAGE_URL` の対象ドメインを `https://pbs.twimg.com/*` に厳格制限。
 
 ### 4.3 ユーザー設定 (Options & Popup)
 - **閾値の初期値**: 0.7 から **0.5 (50%)** へ変更（より積極的に折りたたむ調整）。

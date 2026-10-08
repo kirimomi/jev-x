@@ -63,14 +63,15 @@
 ## 🗺️ ロードマップ
 
 - [x] **Phase 0: 要件定義・カテゴリ策定**
-- [ ] **Phase 1: 判定PoC & 拡張機能基盤**
-  - Jev API連携プロトタイプ (`@typesafe-ai/sdk`)
-  - Chrome拡張機能 (Manifest V3) の雛形作成
-  - ポスト抽出 & バッチ判定 & ブラー表示UI
-  - オプション画面（APIキー登録、カテゴリ別トグル設定）
+- [x] **Phase 1: 判定PoC & 拡張機能基盤・リファクタリング**
+  - Jev API連携 (`@typesafe-ai/sdk`) & モック評価フォールバック
+  - Chrome拡張機能 (Manifest V3) モジュール化アーキテクチャ
+  - セーフなDOM抽出・アコーディオン折りたたみUI
+  - オプション & ポップアップ画面（リアルタイム即時設定反映）
+  - Vitest / happy-dom 自動テスト基盤 & CIワークフロー
 - [ ] **Phase 2: パフォーマンス & キャッシュ最適化**
-  - 重複判定防止のローカルキャッシュ機構 (IndexedDB)
-  - スクロール追従の最適化
+  - 合成キーによる生スコアキャッシュ & 遅延画像追従
+  - 有界LRU画像キャッシュ (500件)
 - [ ] **Phase 3: モバイル（スマホ）対応**
   - Safari Web Extension (iOS) / Firefox・Kiwi (Android) への展開
   - PWA（Web版X）を通じたスマートフォンでの快適な閲覧環境の実現
@@ -78,6 +79,41 @@
 
 ---
 
-## 📜 詳細ドキュメント
+## 🛠️ 開発者向けガイド (Setup & Build)
+
+### 必要要件
+- Node.js 20+
+- npm 10+
+
+### セットアップ・テスト
+```bash
+# 依存関係インストール
+npm ci
+
+# 型チェック
+npm run typecheck
+
+# 静的解析 (Lint)
+npm run lint
+
+# 単体テスト (Vitest)
+npm test
+
+# 拡張機能ビルド
+npm run build:ext
+```
+
+### Chromeへのインストール手順
+1. Google Chrome を開き、URL欄に `chrome://extensions/` を入力して開きます。
+2. 画面右上の **「デベロッパー モード」** をONにします。
+3. **「パッケージ化されていない拡張機能を読み込む」** をクリックします。
+4. プロジェクトルート内の `dist/` ディレクトリを選択します。
+5. `x.com` にアクセスすると拡張機能が有効化されます（右上の拡張アイコンから設定変更可能）。
+
+---
+
+## 📜 ドキュメント
 
 - [詳細仕様書 (docs/SPECIFICATION.md)](docs/SPECIFICATION.md)
+- [アーキテクチャ設計書 (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)
+
