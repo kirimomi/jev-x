@@ -55,7 +55,9 @@ export function decide(
     }
 
     const prob = categoryScores[catId] ?? 0;
-    const threshold = settings.categories[catId]?.threshold ?? (CATEGORY_MAP.get(catId)?.defaultThreshold ?? 0.5);
+    const rawThreshold = settings.categories[catId]?.threshold ?? (CATEGORY_MAP.get(catId)?.defaultThreshold ?? 0.5);
+    const multiplier = settings.globalSensitivityMultiplier ?? 1.0;
+    const threshold = Math.max(0, Math.min(1, rawThreshold * multiplier));
     const isMatched = prob >= threshold;
 
     if (isMatched) {

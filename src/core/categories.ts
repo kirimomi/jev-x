@@ -115,5 +115,6 @@ export function getDefaultUserSettings(): UserFilterSettings {
     showFoldBanner: true,
     requireMediaForAdult: false, // by default allow user to toggle
     settingsVersion: 2,
+    globalSensitivityMultiplier: 1.0,
   };
 }

@@ -3,6 +3,7 @@ import { CategoryId, UserFilterSettings } from '../../types/index.js';
 import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest } from '../messages.js';
 
 let settings: UserFilterSettings = getDefaultUserSettings();
+const categoryUpdaters: Array<() => void> = [];
 
 const categoryListEl = document.getElementById('category-list')!;
 const apiKeyInput = document.getElementById('api-key') as HTMLInputElement;
@@ -19,6 +20,7 @@ function showStatus(text: string) {
 
 function renderCategories() {
   categoryListEl.innerHTML = '';
+  categoryUpdaters.length = 0;
 
   for (const cat of FILTER_CATEGORIES) {
     const userConf = settings.categories[cat.id] || {
@@ -26,6 +28,10 @@ function renderCategories() {
       threshold: cat.defaultThreshold,
     };
 
+    const multiplier = settings.globalSensitivityMultiplier ?? 1.0;
+    const baseThresh = userConf.threshold;
+    const effectiveThresh = Math.max(0, Math.min(1, baseThresh * multiplier));
+    
     const item = document.createElement('div');
     item.className = 'category-item';
 
@@ -39,8 +45,11 @@ function renderCategories() {
       </div>
       <div class="category-controls">
         <div class="slider-group">
-          <span>閾値: <b id="val-${cat.id}">${(userConf.threshold * 100).toFixed(0)}%</b></span>
-          <input type="range" id="thresh-${cat.id}" min="20" max="95" step="5" value="${Math.round(userConf.threshold * 100)}" />
+          <div style="display: flex; flex-direction: column; text-align: right; line-height: 1.2;">
+            <span>閾値: <b id="val-${cat.id}">${(baseThresh * 100).toFixed(0)}%</b></span>
+            <span style="font-size: 11px; color: gray;" id="eff-${cat.id}">実効: ${(effectiveThresh * 100).toFixed(0)}%</span>
+          </div>
+          <input type="range" id="thresh-${cat.id}" min="20" max="95" step="5" value="${Math.round(baseThresh * 100)}" />
         </div>
         <label class="switch">
           <input type="checkbox" id="toggle-${cat.id}" ${userConf.enabled ? 'checked' : ''} />
@@ -55,15 +64,30 @@ function renderCategories() {
     const toggleEl = item.querySelector(`#toggle-${cat.id}`) as HTMLInputElement;
     const threshEl = item.querySelector(`#thresh-${cat.id}`) as HTMLInputElement;
     const valEl = item.querySelector(`#val-${cat.id}`)!;
+    const effEl = item.querySelector(`#eff-${cat.id}`)!;
+
+    const updateEffective = () => {
+      const currentMultiplier = settings.globalSensitivityMultiplier ?? 1.0;
+      const currentBase = settings.categories[cat.id].threshold;
+      const eff = Math.max(0, Math.min(1, currentBase * currentMultiplier));
+      effEl.textContent = `実効: ${(eff * 100).toFixed(0)}%`;
+    };
+    categoryUpdaters.push(updateEffective);
 
     toggleEl.addEventListener('change', () => {
       settings.categories[cat.id].enabled = toggleEl.checked;
+      saveSettings(undefined, true);
     });
 
     threshEl.addEventListener('input', () => {
       const val = parseInt(threshEl.value, 10);
       valEl.textContent = `${val}%`;
       settings.categories[cat.id].threshold = val / 100;
+      updateEffective();
+    });
+    
+    threshEl.addEventListener('change', () => {
+      saveSettings(undefined, true);
     });
   }
 }
@@ -93,6 +117,7 @@ async function loadSettings() {
     showDebugBadgesToggle.checked = settings.showDebugBadges !== false;
     showDebugBadgesToggle.addEventListener('change', () => {
       settings.showDebugBadges = showDebugBadgesToggle.checked;
+      saveSettings(undefined, true);
     });
   }
 
@@ -100,6 +125,7 @@ async function loadSettings() {
     showFoldBannerToggle.checked = settings.showFoldBanner !== false;
     showFoldBannerToggle.addEventListener('change', () => {
       settings.showFoldBanner = showFoldBannerToggle.checked;
+      saveSettings(undefined, true);
     });
   }
 
@@ -107,46 +133,98 @@ async function loadSettings() {
     requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
     requireMediaForAdultToggle.addEventListener('change', () => {
       settings.requireMediaForAdult = requireMediaForAdultToggle.checked;
+      saveSettings(undefined, true);
+    });
+  }
+
+  const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
+  const globalSensitivityVal = document.getElementById('global-sensitivity-val');
+  if (globalSensitivitySlider && globalSensitivityVal) {
+    const currentMultiplier = settings.globalSensitivityMultiplier ?? 1.0;
+    globalSensitivitySlider.value = String(Math.round(currentMultiplier * 100));
+    globalSensitivityVal.textContent = `${globalSensitivitySlider.value}%`;
+
+    globalSensitivitySlider.addEventListener('input', () => {
+      const val = parseInt(globalSensitivitySlider.value, 10);
+      globalSensitivityVal.textContent = `${val}%`;
+      settings.globalSensitivityMultiplier = val / 100;
+      categoryUpdaters.forEach(updater => updater());
+    });
+    
+    globalSensitivitySlider.addEventListener('change', () => {
+      saveSettings(undefined, true);
     });
   }
 
   renderCategories();
 }
 
-async function saveSettings() {
-  const newApiKey = apiKeyInput.value.trim();
-  if (showDebugBadgesToggle) {
-    settings.showDebugBadges = showDebugBadgesToggle.checked;
-  }
-  if (showFoldBannerToggle) {
-    settings.showFoldBanner = showFoldBannerToggle.checked;
-  }
-  if (requireMediaForAdultToggle) {
-    settings.requireMediaForAdult = requireMediaForAdultToggle.checked;
-  }
-
+async function saveSettings(apiKey?: string, quiet = false) {
   const req: SaveSettingsRequest = {
     type: 'SAVE_SETTINGS',
     settings,
-    apiKey: newApiKey ? newApiKey : undefined,
+    apiKey: apiKey ? apiKey : undefined,
   };
 
   try {
     await chrome.runtime.sendMessage(req);
-    showStatus('設定を保存しました。');
-    if (newApiKey) {
-      apiKeyInput.value = '';
-      apiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (保存済み)';
+    if (!quiet || apiKey) {
+      showStatus(apiKey ? 'APIキーを保存しました。' : '設定を保存しました。');
+    } else {
+      showStatus('保存しました');
     }
   } catch (error) {
     console.error('Failed to save settings:', error);
-    alert('設定の保存に失敗しました。');
+    if (!quiet) alert('設定の保存に失敗しました。');
   }
 }
 
-saveBtn.addEventListener('click', saveSettings);
-const saveBtnBottom = document.getElementById('save-all-btn-bottom');
-if (saveBtnBottom) {
-  saveBtnBottom.addEventListener('click', saveSettings);
+
+const saveApiKeyBtn = document.getElementById('save-api-key-btn') as HTMLButtonElement;
+if (saveApiKeyBtn && apiKeyInput) {
+  apiKeyInput.addEventListener('input', () => {
+    const hasInput = apiKeyInput.value.trim().length > 0;
+    saveApiKeyBtn.disabled = !hasInput;
+    saveApiKeyBtn.style.opacity = hasInput ? '1' : '0.5';
+  });
+
+  const handleSaveApiKey = () => {
+    const newApiKey = apiKeyInput.value.trim();
+    if (newApiKey) {
+      saveSettings(newApiKey);
+      apiKeyInput.value = '';
+      apiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (保存済み)';
+      saveApiKeyBtn.disabled = true;
+      saveApiKeyBtn.style.opacity = '0.5';
+    }
+  };
+
+  saveApiKeyBtn.addEventListener('click', handleSaveApiKey);
+  apiKeyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleSaveApiKey();
+  });
 }
+
+const resetDefaultsBtn = document.getElementById('reset-defaults-btn');
+if (resetDefaultsBtn) {
+  resetDefaultsBtn.addEventListener('click', () => {
+    if (confirm('フィルタ設定をデフォルトに戻します。よろしいですか？')) {
+      const defaultSettings = getDefaultUserSettings();
+      settings.categories = defaultSettings.categories;
+      settings.globalSensitivityMultiplier = defaultSettings.globalSensitivityMultiplier;
+      
+      const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
+      const globalSensitivityVal = document.getElementById('global-sensitivity-val');
+      if (globalSensitivitySlider && globalSensitivityVal) {
+        globalSensitivitySlider.value = String(Math.round((settings.globalSensitivityMultiplier ?? 1.0) * 100));
+        globalSensitivityVal.textContent = `${globalSensitivitySlider.value}%`;
+      }
+      
+      renderCategories();
+      saveSettings(undefined, true);
+      showStatus('フィルタ設定をデフォルトに戻しました。');
+    }
+  });
+}
+
 loadSettings();

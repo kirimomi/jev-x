@@ -17,7 +17,7 @@
     }
     body {
       margin: 0;
-      padding: 32px 16px;
+      padding: 32px 16px 0 16px;
       background-color: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -185,13 +185,18 @@
     }
     #status-msg {
       display: none;
-      padding: 10px 14px;
-      background: rgba(0, 186, 124, 0.15);
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px;
+      background: rgba(0, 186, 124, 0.9);
       border: 1px solid var(--success);
-      color: var(--success);
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 13px;
+      color: #fff;
+      font-weight: bold;
+      border-radius: 9999px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
   </style>
 </head>
@@ -202,17 +207,19 @@
         <h1>🛡️ jev-x 設定</h1>
         <p class="subtitle">Jev (TypeSafe AI) によるXタイムラインのコンテンツフィルタリング</p>
       </div>
-      <button id="save-all-btn" class="btn" style="padding: 10px 24px; font-size: 15px;">設定を保存</button>
     </header>
 
     <div id="status-msg">設定を保存しました。</div>
 
     <div class="card">
-      <h2 class="card-title">🔑 API設定</h2>
-      <div class="form-group">
+      <h2 class="card-title">🔑 API</h2>
+      <div class="form-group" style="margin-bottom: 0;">
         <label for="api-key">TypeSafe AI API Key</label>
-        <input type="password" id="api-key" placeholder="ts_********************************" autocomplete="off" />
-        <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0 0 0;">
+        <div style="display: flex; gap: 8px;">
+          <input type="password" id="api-key" placeholder="ts_********************************" autocomplete="off" style="flex: 1;" />
+          <button id="save-api-key-btn" class="btn" disabled style="opacity: 0.5; padding: 8px 16px; white-space: nowrap; flex-shrink: 0;">保存</button>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0 0;">
           ※キーはブラウザのローカルストレージ（chrome.storage.local）にのみ保存され、外部には送信されません。
         </p>
       </div>
@@ -279,15 +286,37 @@
     </div>
 
     <div class="card">
-      <h2 class="card-title">🛡️ フィルタ対象カテゴリ</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 class="card-title" style="margin-bottom: 0;">🛡️ フィルタ</h2>
+        <button id="reset-defaults-btn" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; font-size: 12px;">デフォルトに戻す</button>
+      </div>
+      
+      <div class="category-item" style="background: transparent; border: none; padding: 0; margin-bottom: 20px;">
+        <div class="category-info">
+          <div class="category-header">
+            <span>🎚️ 全体感度（各カテゴリの閾値に対する倍率）</span>
+          </div>
+          <div class="category-desc">
+            全カテゴリの閾値にこの倍率を掛けます。0%に近づくほど感度が高く（厳しく）なり、100%を超えると感度が低く（緩く）なります。デフォルトは100%です。
+          </div>
+        </div>
+        <div class="category-controls">
+          <div class="slider-group">
+            <span>倍率: <b id="global-sensitivity-val">100%</b></span>
+            <input type="range" id="global-sensitivity-slider" min="0" max="200" step="5" value="100" list="snap-marks" />
+            <datalist id="snap-marks">
+              <option value="100"></option>
+            </datalist>
+          </div>
+        </div>
+      </div>
+      
       <div class="category-list" id="category-list">
         <!-- Rendered by options.ts -->
       </div>
     </div>
-
-    <div style="display: flex; justify-content: flex-end; margin-top: 20px; margin-bottom: 40px;">
-      <button id="save-all-btn-bottom" class="btn" style="padding: 12px 36px; font-size: 15px;">設定を保存</button>
-    </div>
+    
+    
   </div>
 
   <script type="module" src="/src/extension/options/options.ts"></script>

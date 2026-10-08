@@ -89,6 +89,8 @@ export interface UserFilterSettings {
   requireMediaForAdult: boolean;
   /** Schema version for settings persistence & migration */
   settingsVersion?: number;
+  /** Global multiplier applied to category thresholds (0.0 to 1.0, representing 0-100%). Defaults to 1.0 */
+  globalSensitivityMultiplier?: number;
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "jev-x",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jev-powered real-time personalized content filter for X (Twitter)",
   "type": "module",
   "scripts": {
