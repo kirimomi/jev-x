@@ -98,11 +98,13 @@
 }
 
 /* Post folding state */
-.jev-post-folded {
+.jev-post-folded,
+article[data-jev-folded="true"] {
   display: none !important;
 }
 
-.jev-post-unfolded {
+.jev-post-unfolded,
+article[data-jev-folded="false"] {
   display: block !important;
   opacity: 0.95;
 }

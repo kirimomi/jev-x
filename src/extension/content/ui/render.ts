@@ -23,6 +23,7 @@ export function applyFilterUI(
   if (!decision.shouldFilter) {
     // Clean up any folded state and banner
     article.classList.remove('jev-post-folded', 'jev-post-unfolded');
+    article.removeAttribute('data-jev-folded');
     if (article.style.display === 'none') {
       article.style.display = '';
     }
@@ -35,6 +36,7 @@ export function applyFilterUI(
       // Complete hide mode: hide post completely and remove banner
       article.style.display = 'none';
       article.classList.remove('jev-post-folded', 'jev-post-unfolded');
+    article.removeAttribute('data-jev-folded');
       if (existingBanner) {
         existingBanner.remove();
       }
@@ -52,9 +54,12 @@ export function applyFilterUI(
         : '';
 
       // If already unfolded by the user, keep unfolded state; otherwise folded
-      const isCurrentlyUnfolded = article.classList.contains('jev-post-unfolded');
+      const isCurrentlyUnfolded = article.classList.contains('jev-post-unfolded') || article.getAttribute('data-jev-folded') === 'false';
       if (!isCurrentlyUnfolded) {
         article.classList.add('jev-post-folded');
+        article.setAttribute('data-jev-folded', 'true');
+      } else {
+        article.setAttribute('data-jev-folded', 'false');
       }
 
       let banner = existingBanner;
@@ -98,10 +103,12 @@ export function applyFilterUI(
           if (isFolded) {
             article.classList.add('jev-post-folded');
             article.classList.remove('jev-post-unfolded');
+            article.setAttribute('data-jev-folded', 'true');
             toggleBtn.textContent = '表示する ▼';
           } else {
             article.classList.remove('jev-post-folded');
             article.classList.add('jev-post-unfolded');
+            article.setAttribute('data-jev-folded', 'false');
             toggleBtn.textContent = 'たたむ ▲';
           }
         });

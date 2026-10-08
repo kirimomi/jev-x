@@ -1,5 +1,6 @@
 import { ImageVisionResult } from '../../types/index.js';
 import { logger } from '../../shared/logger.js';
+import { classifyExposure } from '../../core/visionAnalyzer.js';
 
 /**
  * Request background script to fetch image (bypassing CORS) and classify it with NSFWJS
@@ -40,7 +41,7 @@ export async function evaluateTweetVision(
       exposureScore: 0.95,
       isLikelyNsfw: true,
       label: 'WarningOverlay',
-      details: 'X公式のセンシティブ警告オーバーレイを検知',
+      details: 'Xのセンシティブ警告オーバーレイ検知',
     };
   }
 
@@ -69,26 +70,17 @@ export async function evaluateTweetVision(
   let highestNsfwScore = 0;
 
   for (const src of urlsToAnalyze.slice(0, 4)) {
-    const predictions = await analyzeImageViaBackground(src);
-    if (predictions && Array.isArray(predictions)) {
-      let hentaiScore = 0;
-      let pornScore = 0;
-      let sexyScore = 0;
+    const score = await analyzeImageViaBackground(src);
+    if (typeof score === 'number') {
+      highestNsfwScore = Math.max(highestNsfwScore, score);
 
-      for (const p of predictions) {
-        if (p.className === 'Hentai') hentaiScore = p.probability;
-        if (p.className === 'Porn') pornScore = p.probability;
-        if (p.className === 'Sexy') sexyScore = p.probability;
-      }
+      const classification = classifyExposure(score);
 
-      const explicitScore = Math.max(hentaiScore, pornScore);
-      highestNsfwScore = Math.max(highestNsfwScore, explicitScore, sexyScore);
-
-      if (explicitScore >= 0.5) {
+      if (classification.label === 'Explicit') {
         label = 'Explicit';
         isLikelyNsfw = true;
         break; // Stop at first Explicit
-      } else if (sexyScore >= 0.6 && label === 'Neutral') {
+      } else if (classification.label === 'Sexy' && label === 'Neutral') {
         label = 'Sexy';
         isLikelyNsfw = true;
       }
@@ -101,6 +93,6 @@ export async function evaluateTweetVision(
     exposureScore: Math.round(highestNsfwScore * 100) / 100,
     isLikelyNsfw,
     label,
-    details: `画像解析スコア: ${(highestNsfwScore * 100).toFixed(0)}% (${label})`,
+    details: `画像露出スコア: ${(highestNsfwScore * 100).toFixed(0)}% (${label})`,
   };
 }
