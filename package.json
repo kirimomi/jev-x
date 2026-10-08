@@ -6,11 +6,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run",
+    "test": "vitest run -c config/vitest.config.ts",
     "test:filter": "tsx scripts/test-filter.ts",
     "test:filter:mock": "tsx scripts/test-filter.ts --mock",
-    "build:ext": "vite build && vite build --config vite.config.background.ts && vite build --config vite.config.content.ts",
-    "build": "tsc --noEmit && vite build && vite build --config vite.config.background.ts && vite build --config vite.config.content.ts"
+    "build:ext": "vite build -c config/vite.config.ts && vite build -c config/vite.config.background.ts && vite build -c config/vite.config.content.ts",
+    "build": "tsc --noEmit && vite build -c config/vite.config.ts && vite build -c config/vite.config.background.ts && vite build -c config/vite.config.content.ts"
   },
   "keywords": [
     "jev",

@@ -33,11 +33,11 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/pages/popup.html",
     "default_title": "jev-x Filter Settings"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "src/pages/options.html",
     "open_in_tab": true
   }
 }

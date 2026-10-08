@@ -2,14 +2,15 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  root: resolve(__dirname, '..'),
   build: {
-    outDir: 'dist',
+    outDir: resolve(__dirname, '../dist'),
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        options: resolve(__dirname, 'options.html'),
-        popup: resolve(__dirname, 'popup.html'),
-        offscreen: resolve(__dirname, 'offscreen.html'),
+        options: resolve(__dirname, '../src/pages/options.html'),
+        popup: resolve(__dirname, '../src/pages/popup.html'),
+        offscreen: resolve(__dirname, '../src/pages/offscreen.html'),
       },
       output: {
         entryFileNames: '[name].js',
