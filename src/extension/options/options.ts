@@ -250,12 +250,18 @@ if (resetDefaultsBtn) {
       const defaultSettings = getDefaultUserSettings();
       settings.categories = defaultSettings.categories;
       settings.globalSensitivityMultiplier = defaultSettings.globalSensitivityMultiplier;
+      settings.enableImageVision = defaultSettings.enableImageVision;
+      settings.requireMediaForAdult = defaultSettings.requireMediaForAdult;
       
       const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
       const globalSensitivityVal = document.getElementById('global-sensitivity-val');
       if (globalSensitivitySlider && globalSensitivityVal) {
         globalSensitivitySlider.value = String(Math.round((settings.globalSensitivityMultiplier ?? 1.0) * 100));
         globalSensitivityVal.textContent = `${globalSensitivitySlider.value}%`;
+      }
+
+      if (requireMediaForAdultToggle) {
+        requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
       }
       
       renderCategories();
