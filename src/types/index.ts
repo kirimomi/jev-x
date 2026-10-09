@@ -16,8 +16,9 @@ export interface ImageVisionResult {
   imageCount: number;
   exposureScore: number; // 0.0 - 1.0 (skin/nudity ratio estimate)
   isLikelyNsfw: boolean;
-  label: 'Neutral' | 'Sexy' | 'Explicit' | 'WarningOverlay';
+  label: 'Neutral' | 'Sexy' | 'Explicit' | 'WarningOverlay' | 'Skipped';
   details?: string;
+  latencyMs?: number;
 }
 
 /**
@@ -87,6 +88,8 @@ export interface UserFilterSettings {
   showFoldBanner: boolean;
   /** If true, posts without media (no images/cards/sensitive flags) will NOT be filtered as adult_nsfw */
   requireMediaForAdult: boolean;
+  /** Whether to run local image recognition (pixel exposure analysis) */
+  enableImageVision: boolean;
   /** Schema version for settings persistence & migration */
   settingsVersion?: number;
   /** Global multiplier applied to category thresholds (0.0 to 1.0, representing 0-100%). Defaults to 1.0 */

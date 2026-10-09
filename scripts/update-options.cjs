@@ -57,6 +57,7 @@ if (resetDefaultsBtn) {
       if (showDebugBadgesToggle) showDebugBadgesToggle.checked = settings.showDebugBadges !== false;
       if (showFoldBannerToggle) showFoldBannerToggle.checked = settings.showFoldBanner !== false;
       if (requireMediaForAdultToggle) requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
+      if (enableImageVisionToggle) enableImageVisionToggle.checked = Boolean(settings.enableImageVision);
       
       const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
       const globalSensitivityVal = document.getElementById('global-sensitivity-val');

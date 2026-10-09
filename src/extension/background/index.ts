@@ -1,6 +1,5 @@
 import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
-import { analyzeRgbaPixels } from '../../core/visionAnalyzer.js';
 import { UserFilterSettings, CategoryId } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
 
@@ -13,14 +12,40 @@ let initPromise: Promise<void> | null = null;
 
 // Bounded in-memory cache for analyzed image URLs (max 500 entries) to avoid duplicate network requests
 const MAX_IMAGE_CACHE_ENTRIES = 500;
-const imageScoreCache = new Map<string, number>();
+const imageScoreCache = new Map<string, any>();
 
-function cacheImageScore(url: string, score: number): void {
+function cacheImageScore(url: string, score: any): void {
   if (imageScoreCache.size >= MAX_IMAGE_CACHE_ENTRIES) {
     const oldestKey = imageScoreCache.keys().next().value;
     if (oldestKey) imageScoreCache.delete(oldestKey);
   }
   imageScoreCache.set(url, score);
+}
+
+let creatingOffscreen: Promise<void> | null = null;
+
+async function setupOffscreenDocument(path: string) {
+  const url = chrome.runtime.getURL(path);
+  // Type fallback if getContexts is not fully typed
+  if ('getContexts' in chrome.runtime) {
+    const contexts = await (chrome.runtime as any).getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [url]
+    });
+    if (contexts.length > 0) return;
+  }
+
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+  } else {
+    creatingOffscreen = (chrome.offscreen as any).createDocument({
+      url: path,
+      reasons: ['WORKERS'], // offscreen reason
+      justification: 'Run NSFWJS image classification',
+    });
+    await creatingOffscreen;
+    creatingOffscreen = null;
+  }
 }
 
 /**
@@ -45,42 +70,33 @@ async function broadcastSettings(settings: UserFilterSettings): Promise<void> {
 }
 
 /**
- * Fetches image in background (with extension host_permissions), draws to OffscreenCanvas,
- * and analyzes skin exposure ratio without CORS restrictions.
+ * Passes image URL to the Offscreen Document to analyze with NSFWJS
  */
-async function analyzeImageFromUrl(url: string): Promise<number> {
-  if (!url || typeof url !== 'string') return 0;
+async function analyzeImageFromUrl(url: string): Promise<any> {
+  if (!url || typeof url !== 'string') return null;
 
   if (imageScoreCache.has(url)) {
     return imageScoreCache.get(url)!;
   }
 
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      return 0;
+    await setupOffscreenDocument('src/pages/offscreen.html');
+    const res = await chrome.runtime.sendMessage({
+      type: 'OFFSCREEN_ANALYZE_IMAGE',
+      url
+    });
+    
+    if (res?.error) {
+      console.error('[jev-x background] Offscreen returned error:', res.error);
     }
-    const blob = await res.blob();
-    const imageBitmap = await createImageBitmap(blob);
-
-    const size = 64;
-    const canvas = new OffscreenCanvas(size, size);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      imageBitmap.close();
-      return 0;
+    if (res?.predictions) {
+      cacheImageScore(url, res.predictions);
+      return res.predictions;
     }
-
-    ctx.drawImage(imageBitmap, 0, 0, size, size);
-    imageBitmap.close();
-
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const score = analyzeRgbaPixels(imageData.data, size * size);
-    cacheImageScore(url, score);
-    return score;
+    return null;
   } catch (err) {
     console.warn('[jev-x background] Failed to analyze image:', url, err);
-    return 0;
+    return null;
   }
 }
 
@@ -210,6 +226,11 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           // Restrict image fetching only to legitimate Twitter/X media CDNs
           if (!message.url || !message.url.startsWith('https://pbs.twimg.com/')) {
             sendResponse({ error: 'Unauthorized: ANALYZE_IMAGE_URL only allows https://pbs.twimg.com/' });
+            return;
+          }
+
+          if (currentSettings.enableImageVision === false) {
+            sendResponse({ score: -1 });
             return;
           }
 

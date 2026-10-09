@@ -21,18 +21,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       try {
         const m = await getModel();
         
-        // message.url is an object URL or remote URL.
+        // Fetch image as blob first to utilize extension's host_permissions
+        const response = await fetch(message.url);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
         const img = new Image();
-        img.crossOrigin = 'anonymous';
         
         await new Promise((resolve, reject) => {
           img.onload = resolve;
           img.onerror = reject;
-          img.src = message.url;
+          img.src = objectUrl;
         });
 
         // Use nsfwjs to classify
         const predictions = await m.classify(img);
+        URL.revokeObjectURL(objectUrl);
         sendResponse({ predictions });
       } catch (err) {
         console.error('[jev-x offscreen] Classification error:', err);

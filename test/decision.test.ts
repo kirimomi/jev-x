@@ -1,43 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { decide, createUnfilteredDecision } from '../src/core/decision.js';
-import { classifyExposure, EXPOSURE_THRESHOLDS } from '../src/core/visionAnalyzer.js';
 import { getDefaultUserSettings } from '../src/core/categories.js';
 import { TweetData, CategoryId } from '../src/types/index.js';
-
-describe('classifyExposure', () => {
-  it('classifies score >= 0.45 as Explicit and likely NSFW', () => {
-    expect(classifyExposure(EXPOSURE_THRESHOLDS.EXPLICIT)).toEqual({
-      label: 'Explicit',
-      isLikelyNsfw: true,
-    });
-    expect(classifyExposure(0.85)).toEqual({
-      label: 'Explicit',
-      isLikelyNsfw: true,
-    });
-  });
-
-  it('classifies score >= 0.28 and < 0.45 as Sexy and likely NSFW', () => {
-    expect(classifyExposure(EXPOSURE_THRESHOLDS.SEXY)).toEqual({
-      label: 'Sexy',
-      isLikelyNsfw: true,
-    });
-    expect(classifyExposure(0.35)).toEqual({
-      label: 'Sexy',
-      isLikelyNsfw: true,
-    });
-  });
-
-  it('classifies score < 0.28 as Neutral and not NSFW', () => {
-    expect(classifyExposure(0.27)).toEqual({
-      label: 'Neutral',
-      isLikelyNsfw: false,
-    });
-    expect(classifyExposure(0)).toEqual({
-      label: 'Neutral',
-      isLikelyNsfw: false,
-    });
-  });
-});
 
 describe('createUnfilteredDecision', () => {
   it('creates clean unfiltered decision', () => {

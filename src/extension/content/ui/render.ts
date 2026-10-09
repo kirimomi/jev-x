@@ -14,6 +14,10 @@ export function applyFilterUI(
   showDebugBadges: boolean,
   showFoldBanner: boolean = true
 ): void {
+  const textTime = `${decision.latencyMs}ms`;
+  const imgTime = decision.visionResult?.latencyMs !== undefined ? ` | ${decision.visionResult.latencyMs}ms` : '';
+  const timeStr = `${textTime}${imgTime}`;
+
   // Find any existing banner associated with this tweet
   const existingBanner = article.parentElement?.querySelector(
     `${SELECTORS.FILTER_BANNER}[${ATTRS.TARGET}="${decision.tweetId}"]`
@@ -127,7 +131,7 @@ export function applyFilterUI(
       if (showDebugBadges) {
         const visionInfo = formatVisionInfo(decision.visionResult);
         const pctStr = decision.primaryProbability ? formatPercent(decision.primaryProbability) : '';
-        const badgeText = `🚫 ${pctStr}${visionInfo} (${decision.latencyMs}ms)`.trim();
+        const badgeText = `🚫 ${pctStr}${visionInfo} (${timeStr})`.trim();
 
         if (!bannerBadge) {
           bannerBadge = document.createElement('span');
@@ -191,7 +195,7 @@ export function applyFilterUI(
       const b = document.createElement('b');
       b.textContent = catName;
       span.appendChild(b);
-      span.appendChild(document.createTextNode(`${pct}${visionInfo} (${decision.latencyMs}ms)`));
+      span.appendChild(document.createTextNode(`${pct}${visionInfo} (${timeStr})`));
     } else {
       let topCat = '';
       let topScore = 0;
@@ -204,13 +208,9 @@ export function applyFilterUI(
         }
       }
       const topCatName = topCat ? CATEGORY_MAP.get(topCat as any)?.name || topCat : '';
-      const topInfo = topCat ? ` (最高: ${topCatName} ${formatPercent(topScore)})` : '';
+      const topInfo = topCat ? ` (${topCatName} ${formatPercent(topScore)})` : '';
 
-      span.appendChild(document.createTextNode('✅ 判定: '));
-      const b = document.createElement('b');
-      b.textContent = 'SAFE';
-      span.appendChild(b);
-      span.appendChild(document.createTextNode(`${topInfo}${visionInfo} [${decision.latencyMs}ms]`));
+      span.appendChild(document.createTextNode(`✅${topInfo}${visionInfo} [${timeStr}]`));
     }
   }
 }

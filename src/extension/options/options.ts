@@ -89,6 +89,44 @@ function renderCategories() {
     threshEl.addEventListener('change', () => {
       saveSettings(undefined, true);
     });
+
+    // Add Image Vision sub-item explicitly under 'adult_nsfw'
+    if (cat.id === 'adult_nsfw') {
+      const subItem = document.createElement('div');
+      subItem.className = 'category-item';
+      subItem.style.marginLeft = '40px';
+      subItem.style.marginTop = '-4px';
+      subItem.style.marginBottom = '8px';
+      subItem.style.background = 'transparent';
+      subItem.style.border = 'none';
+      subItem.style.borderLeft = '2px solid var(--border)';
+      subItem.style.borderRadius = '0';
+      subItem.style.padding = '4px 0 4px 16px';
+      
+      subItem.innerHTML = `
+        <div class="category-info">
+          <div class="category-header">
+            <span style="font-size: 13px;">👁️ 画像認識（ローカル分析）による判定</span>
+          </div>
+          <div class="category-desc" style="font-size: 11px;">
+            ON: 画像を解析して露出度等を加味します / OFF: ピクセル解析を行いません（テキストのみ）
+          </div>
+        </div>
+        <div class="category-controls">
+          <label class="switch" style="transform: scale(0.85); transform-origin: right;">
+            <input type="checkbox" id="enable-image-vision" ${settings.enableImageVision !== false ? 'checked' : ''} />
+            <span class="slider"></span>
+          </label>
+        </div>
+      `;
+      categoryListEl.appendChild(subItem);
+
+      const enableImageVisionToggle = subItem.querySelector('#enable-image-vision') as HTMLInputElement;
+      enableImageVisionToggle.addEventListener('change', () => {
+        settings.enableImageVision = enableImageVisionToggle.checked;
+        saveSettings(undefined, true);
+      });
+    }
   }
 }
 

@@ -1,6 +1,5 @@
 import { ImageVisionResult } from '../../types/index.js';
 import { logger } from '../../shared/logger.js';
-import { classifyExposure } from '../../core/visionAnalyzer.js';
 
 /**
  * Request background script to fetch image (bypassing CORS) and classify it with NSFWJS
@@ -65,26 +64,48 @@ export async function evaluateTweetVision(
     }
   });
 
-  let label: 'Neutral' | 'Sexy' | 'Explicit' = 'Neutral';
+  let label: 'Neutral' | 'Sexy' | 'Explicit' | 'Skipped' = 'Neutral';
   let isLikelyNsfw = false;
   let highestNsfwScore = 0;
+  let wasSkipped = false;
+
+  const startTime = performance.now();
 
   for (const src of urlsToAnalyze.slice(0, 4)) {
-    const score = await analyzeImageViaBackground(src);
-    if (typeof score === 'number') {
-      highestNsfwScore = Math.max(highestNsfwScore, score);
+    const predictions = await analyzeImageViaBackground(src);
+    if (predictions === -1) {
+      wasSkipped = true;
+      break;
+    }
+    
+    if (predictions && Array.isArray(predictions)) {
+      let hentaiScore = 0;
+      let pornScore = 0;
+      let sexyScore = 0;
 
-      const classification = classifyExposure(score);
+      for (const p of predictions) {
+        if (p.className === 'Hentai') hentaiScore = p.probability;
+        if (p.className === 'Porn') pornScore = p.probability;
+        if (p.className === 'Sexy') sexyScore = p.probability;
+      }
 
-      if (classification.label === 'Explicit') {
+      const explicitScore = Math.max(hentaiScore, pornScore);
+      highestNsfwScore = Math.max(highestNsfwScore, explicitScore, sexyScore);
+
+      if (explicitScore >= 0.5) {
         label = 'Explicit';
         isLikelyNsfw = true;
         break; // Stop at first Explicit
-      } else if (classification.label === 'Sexy' && label === 'Neutral') {
+      } else if (sexyScore >= 0.6 && label === 'Neutral') {
         label = 'Sexy';
         isLikelyNsfw = true;
       }
     }
+  }
+
+  if (wasSkipped) {
+    label = 'Skipped';
+    highestNsfwScore = 0;
   }
 
   return {
@@ -93,6 +114,7 @@ export async function evaluateTweetVision(
     exposureScore: Math.round(highestNsfwScore * 100) / 100,
     isLikelyNsfw,
     label,
+    latencyMs: Math.round(performance.now() - startTime),
     details: `画像露出スコア: ${(highestNsfwScore * 100).toFixed(0)}% (${label})`,
   };
 }

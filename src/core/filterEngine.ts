@@ -49,7 +49,11 @@ export function buildTweetState(tweet: TweetData): string {
   }
 
   if (tweet.vision && tweet.vision.hasImages) {
-    parts.push(`[画像解析(Vision)]: 露出度判定=${tweet.vision.label} (露出度スコア: ${(tweet.vision.exposureScore * 100).toFixed(0)}%, NSFW疑い=${tweet.vision.isLikelyNsfw ? '高' : '低'})`);
+    if (tweet.vision.label === 'Skipped') {
+      parts.push(`[画像解析(Vision)]: 無効 (ユーザー設定によりスキップ)`);
+    } else {
+      parts.push(`[画像解析(Vision)]: 露出度判定=${tweet.vision.label} (露出度スコア: ${(tweet.vision.exposureScore * 100).toFixed(0)}%, NSFW疑い=${tweet.vision.isLikelyNsfw ? '高' : '低'})`);
+    }
   }
 
   return parts.join('\n\n');

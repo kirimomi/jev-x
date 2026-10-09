@@ -12,9 +12,13 @@ export function formatVisionInfo(vision?: ImageVisionResult): string {
     return ' [⚠️ X警告]';
   }
 
+  if (vision.label === 'Skipped') {
+    return '';
+  }
+
   const countStr = vision.imageCount > 1 ? `${vision.imageCount}枚 ` : '';
   const scorePct = (vision.exposureScore * 100).toFixed(0);
-  return ` [📷 ${countStr}露出 ${scorePct}% (${vision.label})]`;
+  return ` [📷 ${countStr}${scorePct}% (${vision.label})]`;
 }
 
 /**

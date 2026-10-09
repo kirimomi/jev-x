@@ -114,6 +114,7 @@ export function getDefaultUserSettings(): UserFilterSettings {
     showDebugBadges: true,
     showFoldBanner: true,
     requireMediaForAdult: false, // by default allow user to toggle
+    enableImageVision: true,
     settingsVersion: 2,
     globalSensitivityMultiplier: 1.0,
   };
