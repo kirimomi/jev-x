@@ -30,6 +30,7 @@ export interface TweetData {
   authorName?: string;
   text: string;
   ogp?: OgpCardInfo;
+  quoteText?: string;
   imageAlts?: string[];
   isReply?: boolean;
   hasSensitiveWarning?: boolean;

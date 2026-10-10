@@ -80,7 +80,14 @@ export function mockEvaluate(
   activeCategoryIds: CategoryId[]
 ): Record<CategoryId, number> {
   const scores = {} as Record<CategoryId, number>;
-  const text = tweet.text.toLowerCase();
+  
+  // Combine all texts for keyword searching in the mock evaluator
+  const parts = [tweet.text];
+  if (tweet.quoteText) parts.push(tweet.quoteText);
+  if (tweet.ogp?.title) parts.push(tweet.ogp.title);
+  if (tweet.ogp?.description) parts.push(tweet.ogp.description);
+  
+  const textToSearch = parts.join(' ').toLowerCase();
 
   for (const catId of activeCategoryIds) {
     scores[catId] = 0.05; // baseline low probability
@@ -90,10 +97,11 @@ export function mockEvaluate(
     if (catId === 'adult_nsfw') {
       if (tweet.hasSensitiveWarning || tweet.vision?.isLikelyNsfw) {
         scores.adult_nsfw = 0.98;
-      } else if (MOCK_KEYWORDS.adult_nsfw.keywords.some((kw) => text.includes(kw))) {
+      } else if (MOCK_KEYWORDS.adult_nsfw.keywords.some((kw) => textToSearch.includes(kw))) {
         scores.adult_nsfw = MOCK_KEYWORDS.adult_nsfw.score;
       }
     } else if (catId === 'impression_zombie') {
+      // For impression zombies, we usually only care about the main reply text length/emoji
       if (
         tweet.isReply &&
         (tweet.text.length < 15 ||
@@ -105,7 +113,7 @@ export function mockEvaluate(
       }
     } else {
       const rule = MOCK_KEYWORDS[catId];
-      if (rule && rule.keywords.some((kw) => text.includes(kw))) {
+      if (rule && rule.keywords.some((kw) => textToSearch.includes(kw))) {
         scores[catId] = rule.score;
       }
     }

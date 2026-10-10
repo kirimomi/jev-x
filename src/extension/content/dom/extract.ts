@@ -46,8 +46,18 @@ export async function extractTweetData(article: HTMLElement): Promise<TweetData>
   const authorName = authorText.split('@')[0]?.trim() || undefined;
 
   // 3. Text extraction (primary: data-testid="tweetText", fallback: article textContent)
-  const textEl = article.querySelector(SELECTORS.TWEET_TEXT);
-  let text = textEl?.textContent?.trim() || '';
+  const textEls = article.querySelectorAll(SELECTORS.TWEET_TEXT);
+  let text = textEls[0]?.textContent?.trim() || '';
+  let quoteText: string | undefined = undefined;
+
+  if (textEls.length > 1) {
+    quoteText = Array.from(textEls)
+      .slice(1)
+      .map((el) => el.textContent?.trim())
+      .filter(Boolean)
+      .join(' ') || undefined;
+  }
+
   if (!text) {
     text = (article as HTMLElement).innerText?.slice(0, 300) || '';
   }
@@ -132,6 +142,7 @@ export async function extractTweetData(article: HTMLElement): Promise<TweetData>
     authorName,
     text,
     ogp,
+    quoteText,
     imageAlts: imageAlts.length > 0 ? imageAlts : undefined,
     isReply,
     hasSensitiveWarning,
