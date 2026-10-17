@@ -81,6 +81,9 @@ export async function processBatch(): Promise<void> {
   for (const [, element] of currentBatch) {
     try {
       const data = await extractTweetData(element);
+      if (data.vision?.hasImages || data.primaryImageUrl) {
+        element.setAttribute(ATTRS.RECHECKED, 'true');
+      }
       tweetDataList.push(data);
       validElements.push(element);
     } catch (e) {
@@ -142,29 +145,38 @@ export function recheckTweetImages(article: HTMLElement): void {
     return;
   }
 
+  const id = getTweetId(article);
+  if (pendingTweets.has(id)) {
+    return;
+  }
+
   const hasImages = findContentImages(article).length > 0;
   if (hasImages) {
     article.setAttribute(ATTRS.RECHECKED, 'true');
-    const id = getTweetId(article);
     scheduleBatch(id, article);
   }
 }
 
 export function scanTweets(): void {
+  // First, check already-processed tweets for late-loaded images
+  document.querySelectorAll<HTMLElement>(`${SELECTORS.TWEET}[${ATTRS.PROCESSED}]`).forEach((article) => {
+    recheckTweetImages(article);
+  });
+
+  // Then discover new tweets
   const articles = document.querySelectorAll<HTMLElement>(`${SELECTORS.TWEET}:not([${ATTRS.PROCESSED}])`);
 
   if (articles.length > 0) {
     logger.debug(`Detected ${articles.length} new tweets to scan.`);
     articles.forEach((article) => {
       article.setAttribute(ATTRS.PROCESSED, 'true');
+      if (findContentImages(article).length > 0) {
+        article.setAttribute(ATTRS.RECHECKED, 'true');
+      }
       const id = getTweetId(article);
       scheduleBatch(id, article);
     });
   }
-
-  document.querySelectorAll<HTMLElement>(`${SELECTORS.TWEET}[${ATTRS.PROCESSED}]`).forEach((article) => {
-    recheckTweetImages(article);
-  });
 }
 
 export function throttledScan(): void {

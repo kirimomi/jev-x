@@ -20,14 +20,14 @@ export interface PreparedJevImage {
   latencyMs: number;
 }
 
-const jevImageByteCache = new Map<string, Uint8Array>();
+const jevImageByteCache = new Map<string, PreparedJevImage>();
 
-function cacheJevImageBytes(url: string, bytes: Uint8Array): void {
+function cacheJevImage(url: string, prepared: PreparedJevImage): void {
   if (jevImageByteCache.size >= MAX_JEV_IMAGE_CACHE) {
     const oldestKey = jevImageByteCache.keys().next().value;
     if (oldestKey) jevImageByteCache.delete(oldestKey);
   }
-  jevImageByteCache.set(url, bytes);
+  jevImageByteCache.set(url, prepared);
 }
 
 /**
@@ -92,10 +92,7 @@ export async function prepareImageForJev(imageUrl: string): Promise<PreparedJevI
   const normalizedUrl = normalizeTwimgUrlForJev(imageUrl);
 
   if (jevImageByteCache.has(normalizedUrl)) {
-    return {
-      bytes: jevImageByteCache.get(normalizedUrl)!,
-      latencyMs: 0,
-    };
+    return jevImageByteCache.get(normalizedUrl)!;
   }
 
   try {
@@ -126,11 +123,12 @@ export async function prepareImageForJev(imageUrl: string): Promise<PreparedJevI
           quality: JEV_JPEG_QUALITY,
         });
         const bytes = new Uint8Array(await outBlob.arrayBuffer());
-        cacheJevImageBytes(normalizedUrl, bytes);
-        return {
+        const prepared: PreparedJevImage = {
           bytes,
           latencyMs: Math.round(performance.now() - startTime),
         };
+        cacheJevImage(normalizedUrl, prepared);
+        return prepared;
       } finally {
         bitmap.close();
       }
@@ -139,11 +137,12 @@ export async function prepareImageForJev(imageUrl: string): Promise<PreparedJevI
     // Fallback for environments without OffscreenCanvas (e.g. Node.js tests)
     const bytes = new Uint8Array(await blob.arrayBuffer());
     if (bytes.byteLength === 0) return null;
-    cacheJevImageBytes(normalizedUrl, bytes);
-    return {
+    const prepared: PreparedJevImage = {
       bytes,
       latencyMs: Math.round(performance.now() - startTime),
     };
+    cacheJevImage(normalizedUrl, prepared);
+    return prepared;
   } catch (err) {
     console.warn('[jev-x jevImageService] Failed to prepare image for Jev:', imageUrl, err);
     return null;

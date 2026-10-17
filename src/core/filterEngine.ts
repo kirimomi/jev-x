@@ -67,8 +67,8 @@ export function buildTweetState(tweet: TweetData): string {
 export class FilterEngine {
   private client: TypeSafeClient | null = null;
   private mockMode: boolean;
-  // Cache raw evaluated scores keyed by composite state hash (tweet.id + state signature)
-  private scoreCache = new Map<string, Record<CategoryId, number>>();
+  // Cache raw evaluated scores and measured latency keyed by composite state hash (tweet.id + state signature)
+  private scoreCache = new Map<string, { scores: Record<CategoryId, number>; latencyMs: number }>();
 
   constructor(options: FilterEngineOptions = {}) {
     this.mockMode = Boolean(options.mockMode || !options.apiKey);
@@ -105,7 +105,9 @@ export class FilterEngine {
 
     const startTime = performance.now();
     const cacheKey = this.getCacheKey(tweet);
-    let categoryScores = this.scoreCache.get(cacheKey);
+    let cached = this.scoreCache.get(cacheKey);
+    let categoryScores = cached?.scores;
+    let latencyMs = cached?.latencyMs ?? 0;
 
     if (!categoryScores) {
       // Collect active categories
@@ -119,7 +121,8 @@ export class FilterEngine {
 
       if (this.mockMode || !this.client) {
         categoryScores = mockEvaluate(tweet, activeCategoryIds);
-        this.scoreCache.set(cacheKey, categoryScores);
+        latencyMs = Math.round(performance.now() - startTime);
+        this.scoreCache.set(cacheKey, { scores: categoryScores, latencyMs });
       } else {
         const stateText = buildTweetState(tweet);
         const questions: Record<string, NoulQuestion> = {};
@@ -171,7 +174,8 @@ export class FilterEngine {
             const ans = response.answers[catId];
             categoryScores[catId] = ans?.type === 'noul' ? ans.noul : 0;
           }
-          this.scoreCache.set(cacheKey, categoryScores);
+          latencyMs = Math.round(performance.now() - startTime);
+          this.scoreCache.set(cacheKey, { scores: categoryScores, latencyMs });
         } catch (error) {
           console.error(`[FilterEngine] Jev API error for tweet ${tweet.id}:`, error);
           return createUnfilteredDecision(
@@ -183,7 +187,6 @@ export class FilterEngine {
       }
     }
 
-    const latencyMs = Math.round(performance.now() - startTime);
     return decide(categoryScores, tweet, settings, latencyMs);
   }
 
