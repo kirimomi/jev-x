@@ -30,23 +30,43 @@ describe('normalizeSettings', () => {
     expect(normalized.categories.impression_zombie.threshold).toBe(0.6);
   });
 
-  it('preserves user threshold >= 0.7 when settingsVersion is 2', () => {
+  it('preserves user threshold >= 0.7 when settingsVersion >= 2 and migrates v2 toxic_venting/affiliate_spam to enabled=true', () => {
     const v2Stored = {
       settingsVersion: 2,
       categories: {
         adult_nsfw: { enabled: true, threshold: 0.8 },
         ai_slop: { enabled: false, threshold: 0.95 },
+        toxic_venting: { enabled: false, threshold: 0.5 },
+        affiliate_spam: { enabled: false, threshold: 0.5 },
       },
       globalEnabled: true,
       showDebugBadges: false,
     };
 
     const normalized = normalizeSettings(v2Stored);
-    expect(normalized.settingsVersion).toBe(2);
+    expect(normalized.settingsVersion).toBe(CURRENT_SETTINGS_VERSION);
     // User set 80%, must NOT be overwritten with 50%
     expect(normalized.categories.adult_nsfw.threshold).toBe(0.8);
     expect(normalized.categories.ai_slop.threshold).toBe(0.95);
+    expect(normalized.categories.ai_slop.enabled).toBe(false);
+    // Migrated from legacy v2 default-off to v3 default-on
+    expect(normalized.categories.toxic_venting.enabled).toBe(true);
+    expect(normalized.categories.affiliate_spam.enabled).toBe(true);
     expect(normalized.showDebugBadges).toBe(false);
+  });
+
+  it('preserves user-disabled toxic_venting/affiliate_spam when settingsVersion is 3', () => {
+    const v3Stored = {
+      settingsVersion: 3,
+      categories: {
+        toxic_venting: { enabled: false, threshold: 0.6 },
+        affiliate_spam: { enabled: false, threshold: 0.7 },
+      },
+    };
+
+    const normalized = normalizeSettings(v3Stored);
+    expect(normalized.categories.toxic_venting).toEqual({ enabled: false, threshold: 0.6 });
+    expect(normalized.categories.affiliate_spam).toEqual({ enabled: false, threshold: 0.7 });
   });
 
   it('clamps thresholds to [0, 1] and restores defaults for invalid values', () => {
@@ -55,7 +75,7 @@ describe('normalizeSettings', () => {
       categories: {
         adult_nsfw: { enabled: 'not-bool' as any, threshold: 1.5 },
         ai_slop: { enabled: false, threshold: -0.2 },
-        spoilers: { enabled: true, threshold: NaN },
+        rage_bait: { enabled: true, threshold: NaN },
       },
     };
 
@@ -63,19 +83,25 @@ describe('normalizeSettings', () => {
     expect(normalized.categories.adult_nsfw.threshold).toBe(1.0);
     expect(normalized.categories.adult_nsfw.enabled).toBe(true); // default
     expect(normalized.categories.ai_slop.threshold).toBe(0.0);
-    expect(normalized.categories.spoilers.threshold).toBe(0.5); // default fallback for NaN
+    expect(normalized.categories.rage_bait.threshold).toBe(0.5); // default fallback for NaN
   });
 
-  it('discards unknown categories and fills missing ones with defaults', () => {
+  it('discards unknown/removed categories (like spoilers) and fills missing ones with defaults', () => {
     const raw = {
       settingsVersion: 2,
       categories: {
         unknown_cat_xyz: { enabled: true, threshold: 0.9 },
+        spoilers: { enabled: true, threshold: 0.8 },
+        preachy_guru: { enabled: false, threshold: 0.65 },
       },
     };
 
     const normalized = normalizeSettings(raw);
     expect((normalized.categories as any).unknown_cat_xyz).toBeUndefined();
+    expect((normalized.categories as any).spoilers).toBeUndefined();
+    expect((normalized.categories as any).preachy_guru).toBeUndefined();
+    // Fallback from legacy preachy_guru when thread_bait is absent
+    expect(normalized.categories.thread_bait).toEqual({ enabled: false, threshold: 0.65 });
     expect(normalized.categories.adult_nsfw).toBeDefined();
     expect(normalized.categories.adult_nsfw.threshold).toBe(0.5);
   });

@@ -2,7 +2,7 @@ import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
 import { UserFilterSettings, TweetData } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
-import { normalizeSettings } from '../../core/settings.js';
+import { normalizeSettings, CURRENT_SETTINGS_VERSION } from '../../core/settings.js';
 import { analyzeImageWithLocalNsfw } from './localNsfwService.js';
 import { prepareImageForJev } from './jevImageService.js';
 
@@ -41,7 +41,7 @@ async function initEngine(): Promise<void> {
 
     // If legacy settings were migrated, persist the normalized settings back
     const rawObj = raw as Record<string, any>;
-    if (typeof raw === 'object' && raw !== null && (!('settingsVersion' in rawObj) || rawObj.settingsVersion < 2)) {
+    if (typeof raw === 'object' && raw !== null && (!('settingsVersion' in rawObj) || rawObj.settingsVersion < CURRENT_SETTINGS_VERSION)) {
       await chrome.storage.local.set({ userSettings: normalized });
     }
   } else {

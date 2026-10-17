@@ -14,31 +14,6 @@ export const MOCK_KEYWORDS: Record<CategoryId, MockKeywordRule> = {
     ],
     score: 0.95,
   },
-  ai_slop: {
-    keywords: [
-      'ai美女', 'chatgpt', 'gpt', 'ai生成', 'slop', 'midjourney',
-      'プロンプト', '画像生成', '自動化', '量産', '生成ai',
-    ],
-    score: 0.92,
-  },
-  impression_zombie: {
-    keywords: [],
-    score: 0.96,
-  },
-  thread_bait: {
-    keywords: [
-      '最後にとんでもない', '続きはツリー', 'プロフへ', '👇', '1/', 'ツリー',
-      'リプ欄', '保存', 'ブクマ', 'まとめました', '選', '知らなきゃ損',
-    ],
-    score: 0.88,
-  },
-  scam_hustle: {
-    keywords: [
-      '月100万', 'brain', 'プレゼント企画', 'プロンプト配布', '誰でも稼げる',
-      '副業', '無料配布', 'フォロワー限定', 'tips', '不労所得', '完全自動',
-    ],
-    score: 0.94,
-  },
   rage_bait: {
     keywords: [
       '男はこれだから', '女の敵', 'z世代', '民度', '害悪', '炎上',
@@ -52,11 +27,12 @@ export const MOCK_KEYWORDS: Record<CategoryId, MockKeywordRule> = {
     ],
     score: 0.91,
   },
-  preachy_guru: {
+  scam_hustle: {
     keywords: [
-      '優秀な人ほど', '残酷な真実', '30代で気づいたこと', '本質', '思考法', '成功者', '習慣',
+      '月100万', 'brain', 'プレゼント企画', 'プロンプト配布', '誰でも稼げる',
+      '副業', '無料配布', 'フォロワー限定', 'tips', '不労所得', '完全自動',
     ],
-    score: 0.86,
+    score: 0.94,
   },
   affiliate_spam: {
     keywords: [
@@ -64,11 +40,24 @@ export const MOCK_KEYWORDS: Record<CategoryId, MockKeywordRule> = {
     ],
     score: 0.93,
   },
-  spoilers: {
+  thread_bait: {
     keywords: [
-      'の結末', 'が死亡', 'ネタバレ', 'ラストシーン',
+      '最後にとんでもない', '続きはツリー', 'プロフへ', '👇', '1/', 'ツリー',
+      'リプ欄', '保存', 'ブクマ', 'まとめました', '選', '知らなきゃ損',
+      '優秀な人ほど', '残酷な真実', '30代で気づいたこと', '本質', '思考法', '成功者', '習慣',
     ],
-    score: 0.90,
+    score: 0.88,
+  },
+  ai_slop: {
+    keywords: [
+      'ai美女', 'chatgpt', 'gpt', 'ai生成', 'slop', 'midjourney',
+      'プロンプト', '画像生成', '自動化', '量産', '生成ai',
+    ],
+    score: 0.92,
+  },
+  impression_zombie: {
+    keywords: [],
+    score: 0.96,
   },
 };
 

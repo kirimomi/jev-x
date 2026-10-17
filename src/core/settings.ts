@@ -1,7 +1,7 @@
 import { UserFilterSettings, CategoryId, CategorySetting } from '../types/index.js';
 import { FILTER_CATEGORIES, getDefaultUserSettings } from './categories.js';
 
-export const CURRENT_SETTINGS_VERSION = 2;
+export const CURRENT_SETTINGS_VERSION = 3;
 
 /**
  * Normalizes stored settings, ensuring type safety, category validity,
@@ -17,17 +17,24 @@ export function normalizeSettings(stored: unknown): UserFilterSettings {
   const raw = stored as Record<string, any>;
   const rawVersion = typeof raw.settingsVersion === 'number' ? raw.settingsVersion : 1;
   const isLegacyV1 = rawVersion < 2;
+  const isLegacyPreV3 = rawVersion < 3;
 
   const normalizedCategories = {} as Record<CategoryId, CategorySetting>;
 
   for (const cat of FILTER_CATEGORIES) {
-    const rawCat = raw.categories?.[cat.id];
+    const rawCat =
+      raw.categories?.[cat.id] ??
+      (cat.id === 'thread_bait' ? raw.categories?.preachy_guru : undefined);
     let enabled = cat.defaultEnabled;
     let threshold = cat.defaultThreshold;
 
     if (rawCat && typeof rawCat === 'object') {
       if (typeof rawCat.enabled === 'boolean') {
         enabled = rawCat.enabled;
+        // One-time migration to v3: toxic_venting and affiliate_spam were default-OFF before v3
+        if (isLegacyPreV3 && (cat.id === 'toxic_venting' || cat.id === 'affiliate_spam')) {
+          enabled = true;
+        }
       }
 
       if (typeof rawCat.threshold === 'number' && !Number.isNaN(rawCat.threshold)) {

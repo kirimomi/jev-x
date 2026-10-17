@@ -54,15 +54,13 @@ export interface TweetData {
  */
 export type CategoryId =
   | 'adult_nsfw'
-  | 'ai_slop'
-  | 'impression_zombie'
-  | 'thread_bait'
   | 'rage_bait'
-  | 'scam_hustle'
   | 'toxic_venting'
-  | 'preachy_guru'
+  | 'scam_hustle'
   | 'affiliate_spam'
-  | 'spoilers';
+  | 'thread_bait'
+  | 'ai_slop'
+  | 'impression_zombie';
 
 /**
  * Configuration for a single filter category

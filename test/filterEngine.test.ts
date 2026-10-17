@@ -82,13 +82,13 @@ describe('FilterEngine (mockMode)', () => {
       .mockResolvedValueOnce({
         answers: {
           adult_nsfw: { type: 'noul', noul: 0.05 },
+          rage_bait: { type: 'noul', noul: 0.01 },
+          toxic_venting: { type: 'noul', noul: 0.01 },
+          scam_hustle: { type: 'noul', noul: 0.01 },
+          affiliate_spam: { type: 'noul', noul: 0.01 },
+          thread_bait: { type: 'noul', noul: 0.02 },
           ai_slop: { type: 'noul', noul: 0.91 },
           impression_zombie: { type: 'noul', noul: 0.02 },
-          scam_hustle: { type: 'noul', noul: 0.01 },
-          aggressive_polarizing: { type: 'noul', noul: 0.01 },
-          engagement_bait: { type: 'noul', noul: 0.02 },
-          spoilers: { type: 'noul', noul: 0.01 },
-          misinformation: { type: 'noul', noul: 0.01 },
         },
       });
     (apiEngine as any).client = { systemOne: evalSpy };
