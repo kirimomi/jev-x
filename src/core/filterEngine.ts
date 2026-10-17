@@ -1,4 +1,4 @@
-import { TypeSafeClient, noul, type NoulQuestion } from '@typesafe-ai/sdk';
+import { TypeSafeClient, image, noul, type NoulQuestion } from '@typesafe-ai/sdk';
 import {
   TweetData,
   CategoryId,
@@ -31,6 +31,10 @@ export function buildTweetState(tweet: TweetData): string {
 
   parts.push(`[本文]:\n${tweet.text}`);
 
+  if (tweet.quoteText) {
+    parts.push(`[引用元ポスト]:\n${tweet.quoteText}`);
+  }
+
   if (tweet.ogp) {
     const ogpLines: string[] = ['[リンクカード(OGP)]:'];
     if (tweet.ogp.title) ogpLines.push(`  - タイトル: ${tweet.ogp.title}`);
@@ -48,7 +52,8 @@ export function buildTweetState(tweet: TweetData): string {
     parts.push(`[X公式フラグ]: センシティブ警告オーバーレイあり (成人向け/閲覧注意判定)`);
   }
 
-  if (tweet.vision && tweet.vision.hasImages) {
+  // Only include local NSFWJS text summary when Jev direct image attachment is NOT active
+  if (!tweet.jevImageBytes && tweet.vision && tweet.vision.hasImages && tweet.vision.label !== 'JevVision') {
     if (tweet.vision.label === 'Skipped') {
       parts.push(`[画像解析(Vision)]: 無効 (ユーザー設定によりスキップ)`);
     } else {
@@ -71,6 +76,7 @@ export class FilterEngine {
     if (options.apiKey && !this.mockMode) {
       this.client = new TypeSafeClient({
         apiKey: options.apiKey,
+        dangerouslyAllowBrowser: true,
       });
     }
   }
@@ -82,7 +88,8 @@ export class FilterEngine {
     const imgCount = tweet.vision?.imageCount ?? (tweet.imageAlts?.length ?? 0);
     const hasWarn = tweet.hasSensitiveWarning ? '1' : '0';
     const exp = tweet.vision?.exposureScore ?? 0;
-    return `${tweet.id}:${imgCount}:${hasWarn}:${exp}`;
+    const hasJevImg = tweet.jevImageBytes ? 'jev1' : 'jev0';
+    return `${tweet.id}:${imgCount}:${hasWarn}:${exp}:${hasJevImg}`;
   }
 
   /**
@@ -114,7 +121,7 @@ export class FilterEngine {
         categoryScores = mockEvaluate(tweet, activeCategoryIds);
         this.scoreCache.set(cacheKey, categoryScores);
       } else {
-        const state = buildTweetState(tweet);
+        const stateText = buildTweetState(tweet);
         const questions: Record<string, NoulQuestion> = {};
         for (const catId of activeCategoryIds) {
           const catDef = CATEGORY_MAP.get(catId);
@@ -124,15 +131,40 @@ export class FilterEngine {
         }
 
         try {
-          // Timeout after 8 seconds for remote API
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Jev API timeout')), 8000)
-          );
+          const callSystemOne = async (useImage: boolean) => {
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Jev API timeout')), 8000)
+            );
+            const reqCall =
+              useImage && tweet.jevImageBytes
+                ? this.client!.systemOne(
+                    {
+                      state: {
+                        post: stateText,
+                        attached_image: image(tweet.jevImageBytes),
+                      },
+                      questions,
+                    },
+                    {
+                      headers: { 'TypeSafe-Danger-Zone-Images': 'true' },
+                    }
+                  )
+                : this.client!.systemOne({ state: stateText, questions });
 
-          const response = await Promise.race([
-            this.client.systemOne({ state, questions }),
-            timeoutPromise,
-          ]);
+            return Promise.race([reqCall, timeoutPromise]);
+          };
+
+          let response;
+          if (tweet.jevImageBytes) {
+            try {
+              response = await callSystemOne(true);
+            } catch (imgErr) {
+              console.warn(`[FilterEngine] Jev image evaluation failed for ${tweet.id}, falling back to text-only:`, imgErr);
+              response = await callSystemOne(false);
+            }
+          } else {
+            response = await callSystemOne(false);
+          }
 
           categoryScores = {} as Record<CategoryId, number>;
           for (const catId of activeCategoryIds) {

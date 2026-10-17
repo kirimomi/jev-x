@@ -43,13 +43,22 @@ export function normalizeSettings(stored: unknown): UserFilterSettings {
     normalizedCategories[cat.id] = { enabled, threshold };
   }
 
+  let imageVisionMode: 'local' | 'jev' | 'off' = defaults.imageVisionMode ?? 'local';
+  if (raw.imageVisionMode === 'local' || raw.imageVisionMode === 'jev' || raw.imageVisionMode === 'off') {
+    imageVisionMode = raw.imageVisionMode;
+  } else if (typeof raw.enableImageVision === 'boolean') {
+    imageVisionMode = raw.enableImageVision ? 'local' : 'off';
+  }
+  const enableImageVision = imageVisionMode === 'local';
+
   return {
     categories: normalizedCategories,
     globalEnabled: typeof raw.globalEnabled === 'boolean' ? raw.globalEnabled : defaults.globalEnabled,
     showDebugBadges: typeof raw.showDebugBadges === 'boolean' ? raw.showDebugBadges : defaults.showDebugBadges,
     showFoldBanner: typeof raw.showFoldBanner === 'boolean' ? raw.showFoldBanner : defaults.showFoldBanner,
     requireMediaForAdult: typeof raw.requireMediaForAdult === 'boolean' ? raw.requireMediaForAdult : defaults.requireMediaForAdult,
-    enableImageVision: typeof raw.enableImageVision === 'boolean' ? raw.enableImageVision : defaults.enableImageVision,
+    enableImageVision,
+    imageVisionMode,
     globalSensitivityMultiplier: typeof raw.globalSensitivityMultiplier === 'number' && !Number.isNaN(raw.globalSensitivityMultiplier) ? Math.max(0, raw.globalSensitivityMultiplier) : defaults.globalSensitivityMultiplier,
     settingsVersion: CURRENT_SETTINGS_VERSION,
   };

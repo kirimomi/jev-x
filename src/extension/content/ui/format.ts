@@ -12,6 +12,10 @@ export function formatVisionInfo(vision?: ImageVisionResult): string {
     return ' [⚠️ X警告]';
   }
 
+  if (vision.label === 'JevVision') {
+    return ' [🖼️ Jev画像]';
+  }
+
   if (vision.label === 'Skipped') {
     return '';
   }

@@ -1,5 +1,5 @@
 import { FILTER_CATEGORIES, getDefaultUserSettings } from '../../core/categories.js';
-import { CategoryId, UserFilterSettings } from '../../types/index.js';
+import { CategoryId, ImageVisionMode, UserFilterSettings } from '../../types/index.js';
 import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest } from '../messages.js';
 
 let settings: UserFilterSettings = getDefaultUserSettings();
@@ -16,6 +16,19 @@ function showStatus(text: string) {
   setTimeout(() => {
     statusMsg.style.display = 'none';
   }, 2500);
+}
+
+function syncImageVisionModeRadios() {
+  const mode: ImageVisionMode =
+    settings.imageVisionMode === 'local' || settings.imageVisionMode === 'jev' || settings.imageVisionMode === 'off'
+      ? settings.imageVisionMode
+      : settings.enableImageVision === false
+        ? 'off'
+        : 'local';
+  const radios = document.querySelectorAll<HTMLInputElement>('input[name="image-vision-mode"]');
+  radios.forEach((radio) => {
+    radio.checked = radio.value === mode;
+  });
 }
 
 function renderCategories() {
@@ -89,44 +102,6 @@ function renderCategories() {
     threshEl.addEventListener('change', () => {
       saveSettings(undefined, true);
     });
-
-    // Add Image Vision sub-item explicitly under 'adult_nsfw'
-    if (cat.id === 'adult_nsfw') {
-      const subItem = document.createElement('div');
-      subItem.className = 'category-item';
-      subItem.style.marginLeft = '40px';
-      subItem.style.marginTop = '-4px';
-      subItem.style.marginBottom = '8px';
-      subItem.style.background = 'transparent';
-      subItem.style.border = 'none';
-      subItem.style.borderLeft = '2px solid var(--border)';
-      subItem.style.borderRadius = '0';
-      subItem.style.padding = '4px 0 4px 16px';
-      
-      subItem.innerHTML = `
-        <div class="category-info">
-          <div class="category-header">
-            <span style="font-size: 13px;">👁️ 画像認識（ローカル分析）による判定</span>
-          </div>
-          <div class="category-desc" style="font-size: 11px;">
-            ON: 画像を解析して露出度等を加味します / OFF: ピクセル解析を行いません（テキストのみ）
-          </div>
-        </div>
-        <div class="category-controls">
-          <label class="switch" style="transform: scale(0.85); transform-origin: right;">
-            <input type="checkbox" id="enable-image-vision" ${settings.enableImageVision !== false ? 'checked' : ''} />
-            <span class="slider"></span>
-          </label>
-        </div>
-      `;
-      categoryListEl.appendChild(subItem);
-
-      const enableImageVisionToggle = subItem.querySelector('#enable-image-vision') as HTMLInputElement;
-      enableImageVisionToggle.addEventListener('change', () => {
-        settings.enableImageVision = enableImageVisionToggle.checked;
-        saveSettings(undefined, true);
-      });
-    }
   }
 }
 
@@ -174,6 +149,19 @@ async function loadSettings() {
       saveSettings(undefined, true);
     });
   }
+
+  syncImageVisionModeRadios();
+  const imageVisionRadios = document.querySelectorAll<HTMLInputElement>('input[name="image-vision-mode"]');
+  imageVisionRadios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (radio.checked) {
+        const val = radio.value as ImageVisionMode;
+        settings.imageVisionMode = val;
+        settings.enableImageVision = val === 'local';
+        saveSettings(undefined, true);
+      }
+    });
+  });
 
   const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
   const globalSensitivityVal = document.getElementById('global-sensitivity-val');
@@ -250,6 +238,7 @@ if (resetDefaultsBtn) {
       const defaultSettings = getDefaultUserSettings();
       settings.categories = defaultSettings.categories;
       settings.globalSensitivityMultiplier = defaultSettings.globalSensitivityMultiplier;
+      settings.imageVisionMode = defaultSettings.imageVisionMode;
       settings.enableImageVision = defaultSettings.enableImageVision;
       settings.requireMediaForAdult = defaultSettings.requireMediaForAdult;
       
@@ -263,7 +252,8 @@ if (resetDefaultsBtn) {
       if (requireMediaForAdultToggle) {
         requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
       }
-      
+
+      syncImageVisionModeRadios();
       renderCategories();
       saveSettings(undefined, true);
       showStatus('フィルタ設定をデフォルトに戻しました。');

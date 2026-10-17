@@ -183,6 +183,72 @@
     input:checked + .slider:before {
       transform: translateX(20px);
     }
+    .radio-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 600px) {
+      .radio-group {
+        grid-template-columns: 1fr;
+      }
+    }
+    .radio-option {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px;
+      background: #202327;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 0;
+      color: var(--text);
+      font-weight: 400;
+    }
+    .radio-option:hover {
+      border-color: var(--border-light);
+    }
+    .radio-option:has(input:checked) {
+      border-color: var(--primary);
+      background: rgba(29, 155, 240, 0.08);
+    }
+    .radio-option-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .radio-option input[type="radio"] {
+      margin: 0;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .radio-option-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .radio-option-badge {
+      display: inline-block;
+      align-self: flex-start;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 9999px;
+      background: rgba(29, 155, 240, 0.15);
+      color: #6bc9ff;
+      border: 1px solid rgba(29, 155, 240, 0.35);
+    }
+    .radio-option-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
     #status-msg {
       display: none;
       position: fixed;
@@ -308,6 +374,49 @@
               <option value="100"></option>
             </datalist>
           </div>
+        </div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 14px 0;" />
+
+      <div>
+        <div class="category-header">
+          <span>🖼️ 画像認識（Vision）方式</span>
+        </div>
+        <div class="category-desc">
+          ポストに添付された画像をどのように判定に利用するかを選択します。
+        </div>
+        <div class="radio-group" id="image-vision-mode-group">
+          <label class="radio-option">
+            <div class="radio-option-header">
+              <input type="radio" name="image-vision-mode" value="local" checked />
+              <span class="radio-option-title">👁️ ローカル解析</span>
+            </div>
+            <span class="radio-option-badge">🔞 アダルト判定のみ</span>
+            <div class="radio-option-desc">
+              ブラウザ内モデル（NSFWJS）で肌の露出度のみを判定。外部送信なし（デフォルト）。
+            </div>
+          </label>
+          <label class="radio-option">
+            <div class="radio-option-header">
+              <input type="radio" name="image-vision-mode" value="jev" />
+              <span class="radio-option-title">🧪 Jev 画像判定（実験的）</span>
+            </div>
+            <span class="radio-option-badge">全カテゴリに有効</span>
+            <div class="radio-option-desc">
+              1枚目の画像を小サイズ（約30KB）でJevへ送信。🤖 AI美女・AI絵や💸 商材バナー文字にも効きます。
+            </div>
+          </label>
+          <label class="radio-option">
+            <div class="radio-option-header">
+              <input type="radio" name="image-vision-mode" value="off" />
+              <span class="radio-option-title">🚫 OFF（テキストのみ）</span>
+            </div>
+            <span class="radio-option-badge" style="background: rgba(113, 118, 123, 0.15); color: var(--text-muted); border-color: var(--border);">画像解析なし</span>
+            <div class="radio-option-desc">
+              画像のピクセル解析を行わず、本文・ALT属性・引用元テキストのみで高速に判定します。
+            </div>
+          </label>
         </div>
       </div>
       

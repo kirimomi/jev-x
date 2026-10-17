@@ -9,6 +9,7 @@
     "test": "vitest run -c config/vitest.config.ts",
     "test:filter": "tsx scripts/test-filter.ts",
     "test:filter:mock": "tsx scripts/test-filter.ts --mock",
+    "test:image": "tsx scripts/test-image-jev.ts",
     "build:ext": "vite build -c config/vite.config.ts && vite build -c config/vite.config.background.ts && vite build -c config/vite.config.content.ts",
     "build": "tsc --noEmit && vite build -c config/vite.config.ts && vite build -c config/vite.config.background.ts && vite build -c config/vite.config.content.ts"
   },
@@ -23,7 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
-    "@typesafe-ai/sdk": "^0.6.0",
+    "@typesafe-ai/sdk": "^0.7.0",
     "nsfwjs": "^4.3.0"
   },
   "devDependencies": {

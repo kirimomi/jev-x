@@ -88,8 +88,14 @@ export async function extractTweetData(article: HTMLElement): Promise<TweetData>
   // 5. Image elements (Tweet photos + Link card / OGP thumbnails)
   const imageAlts: string[] = [];
   const allImgs = findContentImages(article);
+  let primaryImageUrl: string | undefined = undefined;
 
   allImgs.forEach((img) => {
+    const src = img.currentSrc || img.src;
+    if (!primaryImageUrl && src && src.startsWith('https://pbs.twimg.com/')) {
+      primaryImageUrl = src;
+    }
+
     const alt = img.getAttribute('alt')?.trim();
     if (
       alt &&
@@ -144,6 +150,7 @@ export async function extractTweetData(article: HTMLElement): Promise<TweetData>
     ogp,
     quoteText,
     imageAlts: imageAlts.length > 0 ? imageAlts : undefined,
+    primaryImageUrl,
     isReply,
     hasSensitiveWarning,
     vision,

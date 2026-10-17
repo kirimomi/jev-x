@@ -13,8 +13,8 @@ export const FILTER_CATEGORIES: CategoryDefinition[] = [
   {
     id: 'ai_slop',
     name: 'AI Slop (低品質AI生成)',
-    description: '粗製乱造された低品質AI画像/動画、ChatGPTによる無機質なまとめ・解説・スパム投稿',
-    instruction: 'Is this post low-quality automated AI-generated slop, AI spam, or generic churned-out chatbot content?',
+    description: '粗製乱造された低品質AI画像/動画（AI美女・量産型AIイラスト等）、ChatGPTによる無機質なまとめ・解説・スパム投稿',
+    instruction: 'Is this post low-quality automated AI-generated slop, AI spam, generic churned-out chatbot content, or does the attached image appear to be an AI-generated image (such as a glossy AI-generated beauty/influencer portrait, mass-produced AI anime illustration, or synthetic diffusion artwork)?',
     defaultThreshold: 0.5,
     defaultEnabled: true,
     badgeIcon: '🤖',
@@ -115,6 +115,7 @@ export function getDefaultUserSettings(): UserFilterSettings {
     showFoldBanner: true,
     requireMediaForAdult: false, // by default allow user to toggle
     enableImageVision: true,
+    imageVisionMode: 'local',
     settingsVersion: 2,
     globalSensitivityMultiplier: 1.0,
   };

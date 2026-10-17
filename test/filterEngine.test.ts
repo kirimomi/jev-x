@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FilterEngine } from '../src/core/filterEngine.js';
 import { getDefaultUserSettings } from '../src/core/categories.js';
+import { computeJevTargetDimensions, normalizeTwimgUrlForJev } from '../src/extension/background/jevImageService.js';
 import { TweetData, UserFilterSettings } from '../src/types/index.js';
 
 describe('FilterEngine (mockMode)', () => {
@@ -89,5 +90,69 @@ describe('FilterEngine (mockMode)', () => {
     };
     const decision2 = await engine.evaluateTweet(tweet, modifiedSettings);
     expect(decision2.shouldFilter).toBe(false);
+  });
+
+  it('sends attached_image and TypeSafe-Danger-Zone-Images header when jevImageBytes is provided, and falls back to text-only on image error', async () => {
+    const apiEngine = new FilterEngine({ apiKey: 'ts_test_key' });
+    const evalSpy = vi.fn()
+      // First call with image rejects (e.g., 400 Invalid image dimensions)
+      .mockRejectedValueOnce(new Error('Invalid image'))
+      // Second call (text-only fallback) resolves
+      .mockResolvedValueOnce({
+        answers: {
+          adult_nsfw: { type: 'noul', noul: 0.05 },
+          ai_slop: { type: 'noul', noul: 0.91 },
+          impression_zombie: { type: 'noul', noul: 0.02 },
+          scam_hustle: { type: 'noul', noul: 0.01 },
+          aggressive_polarizing: { type: 'noul', noul: 0.01 },
+          engagement_bait: { type: 'noul', noul: 0.02 },
+          spoilers: { type: 'noul', noul: 0.01 },
+          misinformation: { type: 'noul', noul: 0.01 },
+        },
+      });
+    (apiEngine as any).client = { systemOne: evalSpy };
+
+    const tweet: TweetData = {
+      id: 'jev-img-1',
+      authorUsername: 'ai_poster',
+      text: 'おはようございます☀️',
+      primaryImageUrl: 'https://pbs.twimg.com/media/abc123?format=jpg&name=small',
+      jevImageBytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    };
+
+    const decision = await apiEngine.evaluateTweet(tweet, {
+      ...defaultSettings,
+      imageVisionMode: 'jev',
+    });
+
+    expect(evalSpy).toHaveBeenCalledTimes(2);
+    // 1st call: includes attached_image and TypeSafe-Danger-Zone-Images header
+    expect(evalSpy.mock.calls[0][0].state).toHaveProperty('attached_image');
+    expect(evalSpy.mock.calls[0][1]).toEqual({
+      headers: { 'TypeSafe-Danger-Zone-Images': 'true' },
+    });
+    // 2nd call: fallback to text-only state without headers
+    expect(evalSpy.mock.calls[1][0].state).not.toHaveProperty('attached_image');
+    expect(decision.shouldFilter).toBe(true);
+    expect(decision.primaryReason).toBe('ai_slop');
+  });
+});
+
+describe('jevImageService helpers', () => {
+  it('normalizes pbs.twimg.com URLs to format=jpg&name=small', () => {
+    expect(
+      normalizeTwimgUrlForJev('https://pbs.twimg.com/media/Gxyz123?format=webp&name=large')
+    ).toBe('https://pbs.twimg.com/media/Gxyz123?format=jpg&name=small');
+  });
+
+  it('computes target dimensions with short side ~320px and enforces [280, 1568] bounds', () => {
+    // 1024x1024 square -> 320x320
+    expect(computeJevTargetDimensions(1024, 1024)).toEqual({ width: 320, height: 320 });
+    // 1200x675 (16:9) -> short side 320, long side 569
+    expect(computeJevTargetDimensions(1200, 675)).toEqual({ width: 569, height: 320 });
+    // Rejected if either original dimension is < 280px
+    expect(computeJevTargetDimensions(240, 500)).toBeNull();
+    // Extreme banner aspect ratio that cannot keep both sides in [280, 1568]
+    expect(computeJevTargetDimensions(3000, 300)).toBeNull();
   });
 });

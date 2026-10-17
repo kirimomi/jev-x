@@ -79,4 +79,19 @@ describe('normalizeSettings', () => {
     expect(normalized.categories.adult_nsfw).toBeDefined();
     expect(normalized.categories.adult_nsfw.threshold).toBe(0.5);
   });
+
+  it('normalizes imageVisionMode and migrates legacy enableImageVision', () => {
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'jev' }).imageVisionMode).toBe('jev');
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'jev' }).enableImageVision).toBe(false);
+
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'local' }).imageVisionMode).toBe('local');
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'local' }).enableImageVision).toBe(true);
+
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'off' }).imageVisionMode).toBe('off');
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'off' }).enableImageVision).toBe(false);
+
+    // Legacy fallback when imageVisionMode is absent
+    expect(normalizeSettings({ settingsVersion: 2, enableImageVision: false }).imageVisionMode).toBe('off');
+    expect(normalizeSettings({ settingsVersion: 2, enableImageVision: true }).imageVisionMode).toBe('local');
+  });
 });

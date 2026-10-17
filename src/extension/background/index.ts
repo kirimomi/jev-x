@@ -1,52 +1,15 @@
 import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
-import { UserFilterSettings, CategoryId } from '../../types/index.js';
+import { UserFilterSettings, TweetData } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
-
 import { normalizeSettings } from '../../core/settings.js';
+import { analyzeImageWithLocalNsfw } from './localNsfwService.js';
+import { prepareImageForJev } from './jevImageService.js';
 
 let filterEngine: FilterEngine | null = null;
 let currentSettings: UserFilterSettings = getDefaultUserSettings();
 let currentApiKey: string | undefined = undefined;
 let initPromise: Promise<void> | null = null;
-
-// Bounded in-memory cache for analyzed image URLs (max 500 entries) to avoid duplicate network requests
-const MAX_IMAGE_CACHE_ENTRIES = 500;
-const imageScoreCache = new Map<string, any>();
-
-function cacheImageScore(url: string, score: any): void {
-  if (imageScoreCache.size >= MAX_IMAGE_CACHE_ENTRIES) {
-    const oldestKey = imageScoreCache.keys().next().value;
-    if (oldestKey) imageScoreCache.delete(oldestKey);
-  }
-  imageScoreCache.set(url, score);
-}
-
-let creatingOffscreen: Promise<void> | null = null;
-
-async function setupOffscreenDocument(path: string) {
-  const url = chrome.runtime.getURL(path);
-  // Type fallback if getContexts is not fully typed
-  if ('getContexts' in chrome.runtime) {
-    const contexts = await (chrome.runtime as any).getContexts({
-      contextTypes: ['OFFSCREEN_DOCUMENT'],
-      documentUrls: [url]
-    });
-    if (contexts.length > 0) return;
-  }
-
-  if (creatingOffscreen) {
-    await creatingOffscreen;
-  } else {
-    creatingOffscreen = (chrome.offscreen as any).createDocument({
-      url: path,
-      reasons: ['WORKERS'], // offscreen reason
-      justification: 'Run NSFWJS image classification',
-    });
-    await creatingOffscreen;
-    creatingOffscreen = null;
-  }
-}
 
 /**
  * Broadcast updated settings to all open x.com / twitter.com tabs
@@ -66,37 +29,6 @@ async function broadcastSettings(settings: UserFilterSettings): Promise<void> {
     }
   } catch (err) {
     console.debug('[jev-x background] Tab broadcast notice:', err);
-  }
-}
-
-/**
- * Passes image URL to the Offscreen Document to analyze with NSFWJS
- */
-async function analyzeImageFromUrl(url: string): Promise<any> {
-  if (!url || typeof url !== 'string') return null;
-
-  if (imageScoreCache.has(url)) {
-    return imageScoreCache.get(url)!;
-  }
-
-  try {
-    await setupOffscreenDocument('src/pages/offscreen.html');
-    const res = await chrome.runtime.sendMessage({
-      type: 'OFFSCREEN_ANALYZE_IMAGE',
-      url
-    });
-    
-    if (res?.error) {
-      console.error('[jev-x background] Offscreen returned error:', res.error);
-    }
-    if (res?.predictions) {
-      cacheImageScore(url, res.predictions);
-      return res.predictions;
-    }
-    return null;
-  } catch (err) {
-    console.warn('[jev-x background] Failed to analyze image:', url, err);
-    return null;
   }
 }
 
@@ -152,7 +84,37 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
 
       switch (message.type) {
         case 'EVALUATE_TWEETS': {
-          const decisions = await filterEngine!.evaluateBatch(message.tweets, currentSettings);
+          const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
+          let tweetsToEvaluate: TweetData[] = message.tweets;
+
+          // Experimental Jev direct image mode: attach downscaled 1st image (~30KB JPEG)
+          if (visionMode === 'jev' && currentApiKey) {
+            tweetsToEvaluate = await Promise.all(
+              message.tweets.map(async (tweet) => {
+                if (!tweet.primaryImageUrl || tweet.hasSensitiveWarning) {
+                  return tweet;
+                }
+                const prepared = await prepareImageForJev(tweet.primaryImageUrl);
+                if (!prepared) {
+                  return tweet;
+                }
+                return {
+                  ...tweet,
+                  jevImageBytes: prepared.bytes,
+                  vision: {
+                    hasImages: true,
+                    imageCount: tweet.vision?.imageCount || 1,
+                    exposureScore: 0,
+                    isLikelyNsfw: false,
+                    label: 'JevVision',
+                    latencyMs: prepared.latencyMs,
+                  },
+                };
+              })
+            );
+          }
+
+          const decisions = await filterEngine!.evaluateBatch(tweetsToEvaluate, currentSettings);
           sendResponse({
             decisions,
             showDebugBadges: currentSettings.showDebugBadges !== false,
@@ -229,12 +191,14 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
             return;
           }
 
-          if (currentSettings.enableImageVision === false) {
+          const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
+          // Skip local NSFWJS when mode is 'off' or 'jev', or when adult_nsfw category itself is disabled
+          if (visionMode !== 'local' || currentSettings.categories?.adult_nsfw?.enabled === false) {
             sendResponse({ score: -1 });
             return;
           }
 
-          const score = await analyzeImageFromUrl(message.url);
+          const score = await analyzeImageWithLocalNsfw(message.url);
           sendResponse({ score });
           break;
         }
