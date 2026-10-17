@@ -99,8 +99,6 @@ export interface UserFilterSettings {
   showDebugBadges: boolean;
   /** Whether to show accordion fold/unfold banner (true) or completely hide filtered posts without banner (false) */
   showFoldBanner: boolean;
-  /** If true, posts without media (no images/cards/sensitive flags) will NOT be filtered as adult_nsfw */
-  requireMediaForAdult: boolean;
   /** Whether to run local image recognition (pixel exposure analysis) - kept synced with imageVisionMode for compatibility */
   enableImageVision: boolean;
   /** Image recognition engine selection ('local' | 'jev' | 'off'). Defaults to 'local'. */

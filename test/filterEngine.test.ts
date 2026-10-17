@@ -51,25 +51,6 @@ describe('FilterEngine (mockMode)', () => {
     expect(decision.primaryProbability).toBeGreaterThanOrEqual(0.5);
   });
 
-  it('respects requireMediaForAdult setting when media is absent', async () => {
-    const settings: UserFilterSettings = {
-      ...defaultSettings,
-      requireMediaForAdult: true,
-    };
-    // Text-only adult spam without images, cards, or warning
-    const tweet: TweetData = {
-      id: 'tweet-4',
-      authorUsername: 'adult_user',
-      text: '裏垢女子 パパ活募集 風俗',
-      hasSensitiveWarning: false,
-      imageAlts: [],
-    };
-    const decision = await engine.evaluateTweet(tweet, settings);
-    // With requireMediaForAdult, text-only adult_nsfw is skipped
-    const adultMatched = decision.matchedCategories.find(c => c.categoryId === 'adult_nsfw');
-    expect(adultMatched).toBeUndefined();
-  });
-
   it('caches raw category scores and recalculates decision when settings change', async () => {
     const tweet: TweetData = {
       id: 'cached-1',

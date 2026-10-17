@@ -56,7 +56,6 @@ export function normalizeSettings(stored: unknown): UserFilterSettings {
     globalEnabled: typeof raw.globalEnabled === 'boolean' ? raw.globalEnabled : defaults.globalEnabled,
     showDebugBadges: typeof raw.showDebugBadges === 'boolean' ? raw.showDebugBadges : defaults.showDebugBadges,
     showFoldBanner: typeof raw.showFoldBanner === 'boolean' ? raw.showFoldBanner : defaults.showFoldBanner,
-    requireMediaForAdult: typeof raw.requireMediaForAdult === 'boolean' ? raw.requireMediaForAdult : defaults.requireMediaForAdult,
     enableImageVision,
     imageVisionMode,
     globalSensitivityMultiplier: typeof raw.globalSensitivityMultiplier === 'number' && !Number.isNaN(raw.globalSensitivityMultiplier) ? Math.max(0, raw.globalSensitivityMultiplier) : defaults.globalSensitivityMultiplier,

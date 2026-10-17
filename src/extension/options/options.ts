@@ -105,9 +105,21 @@ function renderCategories() {
   }
 }
 
+const globalEnabledToggle = document.getElementById('global-enabled') as HTMLInputElement;
 const showDebugBadgesToggle = document.getElementById('show-debug-badges') as HTMLInputElement;
 const showFoldBannerToggle = document.getElementById('show-fold-banner') as HTMLInputElement;
-const requireMediaForAdultToggle = document.getElementById('require-media-for-adult') as HTMLInputElement;
+
+function syncBasicToggles() {
+  if (globalEnabledToggle) {
+    globalEnabledToggle.checked = settings.globalEnabled !== false;
+  }
+  if (showDebugBadgesToggle) {
+    showDebugBadgesToggle.checked = settings.showDebugBadges !== false;
+  }
+  if (showFoldBannerToggle) {
+    showFoldBannerToggle.checked = settings.showFoldBanner !== false;
+  }
+}
 
 async function loadSettings() {
   try {
@@ -126,8 +138,16 @@ async function loadSettings() {
     console.warn('Failed to load settings from background:', error);
   }
 
+  syncBasicToggles();
+
+  if (globalEnabledToggle) {
+    globalEnabledToggle.addEventListener('change', () => {
+      settings.globalEnabled = globalEnabledToggle.checked;
+      saveSettings(undefined, true);
+    });
+  }
+
   if (showDebugBadgesToggle) {
-    showDebugBadgesToggle.checked = settings.showDebugBadges !== false;
     showDebugBadgesToggle.addEventListener('change', () => {
       settings.showDebugBadges = showDebugBadgesToggle.checked;
       saveSettings(undefined, true);
@@ -135,17 +155,8 @@ async function loadSettings() {
   }
 
   if (showFoldBannerToggle) {
-    showFoldBannerToggle.checked = settings.showFoldBanner !== false;
     showFoldBannerToggle.addEventListener('change', () => {
       settings.showFoldBanner = showFoldBannerToggle.checked;
-      saveSettings(undefined, true);
-    });
-  }
-
-  if (requireMediaForAdultToggle) {
-    requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
-    requireMediaForAdultToggle.addEventListener('change', () => {
-      settings.requireMediaForAdult = requireMediaForAdultToggle.checked;
       saveSettings(undefined, true);
     });
   }
@@ -183,6 +194,17 @@ async function loadSettings() {
   }
 
   renderCategories();
+}
+
+// Keep options page toggles in sync when changed from popup
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.userSettings?.newValue) {
+      settings = changes.userSettings.newValue as UserFilterSettings;
+      syncBasicToggles();
+      syncImageVisionModeRadios();
+    }
+  });
 }
 
 async function saveSettings(apiKey?: string, quiet = false) {
@@ -240,17 +262,12 @@ if (resetDefaultsBtn) {
       settings.globalSensitivityMultiplier = defaultSettings.globalSensitivityMultiplier;
       settings.imageVisionMode = defaultSettings.imageVisionMode;
       settings.enableImageVision = defaultSettings.enableImageVision;
-      settings.requireMediaForAdult = defaultSettings.requireMediaForAdult;
       
       const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
       const globalSensitivityVal = document.getElementById('global-sensitivity-val');
       if (globalSensitivitySlider && globalSensitivityVal) {
         globalSensitivitySlider.value = String(Math.round((settings.globalSensitivityMultiplier ?? 1.0) * 100));
         globalSensitivityVal.textContent = `${globalSensitivitySlider.value}%`;
-      }
-
-      if (requireMediaForAdultToggle) {
-        requireMediaForAdultToggle.checked = Boolean(settings.requireMediaForAdult);
       }
 
       syncImageVisionModeRadios();

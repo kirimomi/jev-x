@@ -34,44 +34,20 @@ describe('decide', () => {
     expect(decision.matchedCategories.length).toBe(2);
   });
 
-  it('skips adult_nsfw when requireMediaForAdult is enabled and tweet has no media', () => {
+  it('returns shouldFilter=false while preserving allScores when globalEnabled is false', () => {
     const tweet: TweetData = {
       id: 't-2',
       authorUsername: 'user2',
-      text: 'Text only adult words',
-      hasSensitiveWarning: false,
-      imageAlts: [],
+      text: 'Adult post',
     };
     const scores: Partial<Record<CategoryId, number>> = {
       adult_nsfw: 0.95,
     };
-    const settings = { ...defaultSettings, requireMediaForAdult: true };
+    const settings = { ...defaultSettings, globalEnabled: false };
 
-    const decision = decide(scores, tweet, settings);
+    const decision = decide(scores, tweet, settings, 15);
     expect(decision.shouldFilter).toBe(false);
     expect(decision.matchedCategories).toEqual([]);
-  });
-
-  it('matches adult_nsfw when requireMediaForAdult is enabled and tweet has images', () => {
-    const tweet: TweetData = {
-      id: 't-3',
-      authorUsername: 'user3',
-      text: 'Adult post with image',
-      vision: {
-        hasImages: true,
-        imageCount: 1,
-        exposureScore: 0.9,
-        isLikelyNsfw: true,
-        label: 'Explicit',
-      },
-    };
-    const scores: Partial<Record<CategoryId, number>> = {
-      adult_nsfw: 0.95,
-    };
-    const settings = { ...defaultSettings, requireMediaForAdult: true };
-
-    const decision = decide(scores, tweet, settings);
-    expect(decision.shouldFilter).toBe(true);
-    expect(decision.primaryReason).toBe('adult_nsfw');
+    expect(decision.allScores).toEqual(scores);
   });
 });

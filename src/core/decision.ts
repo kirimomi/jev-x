@@ -35,6 +35,18 @@ export function decide(
   settings: UserFilterSettings,
   latencyMs: number = 0
 ): FilterDecision {
+  if (!settings.globalEnabled) {
+    return {
+      tweetId: tweet.id,
+      shouldFilter: false,
+      matchedCategories: [],
+      allScores: categoryScores,
+      visionResult: tweet.vision,
+      evaluatedAt: Date.now(),
+      latencyMs,
+    };
+  }
+
   const activeCategoryIds = (Object.keys(settings.categories) as CategoryId[]).filter(
     (catId) => settings.categories[catId]?.enabled
   );
@@ -43,17 +55,7 @@ export function decide(
   let primaryReason: CategoryId | undefined;
   let highestProbability = -1;
 
-  const hasMedia = Boolean(
-    tweet.hasSensitiveWarning ||
-    (tweet.vision && tweet.vision.hasImages && tweet.vision.imageCount > 0) ||
-    (tweet.imageAlts && tweet.imageAlts.length > 0)
-  );
-
   for (const catId of activeCategoryIds) {
-    if (catId === 'adult_nsfw' && settings.requireMediaForAdult && !hasMedia) {
-      continue;
-    }
-
     const prob = categoryScores[catId] ?? 0;
     const rawThreshold = settings.categories[catId]?.threshold ?? (CATEGORY_MAP.get(catId)?.defaultThreshold ?? 0.5);
     const multiplier = settings.globalSensitivityMultiplier ?? 1.0;

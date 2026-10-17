@@ -7,7 +7,7 @@ describe('getDefaultUserSettings', () => {
     expect(settings.globalEnabled).toBe(true);
     expect(settings.showDebugBadges).toBe(true);
     expect(settings.showFoldBanner).toBe(true);
-    expect(settings.requireMediaForAdult).toBe(false);
+    expect(settings.imageVisionMode).toBe('local');
 
     for (const cat of FILTER_CATEGORIES) {
       expect(settings.categories[cat.id]).toBeDefined();
