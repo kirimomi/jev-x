@@ -134,3 +134,46 @@ describe('extractTweetData', () => {
     expect(data.hasSensitiveWarning).toBe(true);
   });
 });
+
+describe('applyFilterUI badge placement', () => {
+  it('mounts safe badge on Tweet-User-Avatar with icon and hover tooltip without inserting before tweetText', async () => {
+    const { applyFilterUI } = await import('../src/extension/content/ui/render.js');
+    document.body.innerHTML = `
+      <article data-testid="tweet">
+        <div data-testid="Tweet-User-Avatar">
+          <img src="https://pbs.twimg.com/profile_images/avatar.jpg" alt="" />
+        </div>
+        <div class="right-col">
+          <div data-testid="User-Name"><span>山田太郎</span><span>@yamada_taro</span></div>
+          <div data-testid="tweetText"><span>本文の行がずれないことを確認するテスト</span></div>
+        </div>
+      </article>
+    `;
+    const article = document.body.querySelector('article') as HTMLElement;
+    const avatar = article.querySelector('[data-testid="Tweet-User-Avatar"]') as HTMLElement;
+    const rightCol = article.querySelector('.right-col') as HTMLElement;
+
+    applyFilterUI(
+      article,
+      {
+        tweetId: '1000000000000000001',
+        shouldFilter: false,
+        matchedCategories: [],
+        allScores: { ai_slop: 0.12 },
+        latencyMs: 185,
+        evaluatedAt: Date.now(),
+      },
+      true,
+      true
+    );
+
+    const badge = avatar.querySelector('.jev-inspect-badge.jev-avatar-badge');
+    expect(badge).not.toBeNull();
+    expect(badge?.querySelector('.jev-inspect-icon')?.textContent).toBe('✅');
+    expect(badge?.querySelector('.jev-inspect-tooltip')?.textContent).toContain('12%');
+    expect(badge?.querySelector('.jev-inspect-tooltip')?.textContent).toContain('185ms');
+    // Ensure right column has only User-Name and tweetText (no badge inserted above tweetText)
+    expect(rightCol.querySelector('.jev-inspect-badge')).toBeNull();
+  });
+});
+

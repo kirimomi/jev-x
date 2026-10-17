@@ -152,23 +152,38 @@ export function applyFilterUI(
     }
   }
 
-  // 3. Inspection/Debug badge on the article itself
+  // 3. Inspection/Debug badge on the article itself (anchored to bottom-right of user avatar)
   let articleBadge = article.querySelector(SELECTORS.INSPECT_BADGE) as HTMLElement | null;
   if (!showDebugBadges) {
     if (articleBadge) {
       articleBadge.remove();
     }
   } else {
+    const avatarEl = article.querySelector(SELECTORS.USER_AVATAR) as HTMLElement | null;
+
     if (!articleBadge) {
       articleBadge = document.createElement('div');
-      articleBadge.className = 'jev-inspect-badge';
-      const span = document.createElement('span');
-      articleBadge.appendChild(span);
+      articleBadge.className = 'jev-inspect-badge jev-avatar-badge';
 
-      // Insertion target: before tweetText, or inside User-Name row, or at top of article
-      const textEl = article.querySelector(SELECTORS.TWEET_TEXT);
-      if (textEl?.parentElement) {
-        textEl.parentElement.insertBefore(articleBadge, textEl);
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'jev-inspect-icon';
+      const tooltipSpan = document.createElement('span');
+      tooltipSpan.className = 'jev-inspect-tooltip';
+
+      articleBadge.appendChild(iconSpan);
+      articleBadge.appendChild(tooltipSpan);
+
+      // Prevent X's user profile hover card or tweet click navigation when interacting with the badge
+      for (const evt of ['mouseenter', 'mouseover', 'pointerenter', 'pointerover', 'click']) {
+        articleBadge.addEventListener(evt, (e) => {
+          e.stopPropagation();
+        });
+      }
+
+      if (avatarEl) {
+        avatarEl.style.position = 'relative';
+        avatarEl.style.overflow = 'visible';
+        avatarEl.appendChild(articleBadge);
       } else {
         const userEl = article.querySelector(SELECTORS.USER_NAME);
         if (userEl?.parentElement) {
@@ -177,12 +192,30 @@ export function applyFilterUI(
           article.prepend(articleBadge);
         }
       }
+    } else if (avatarEl && articleBadge.parentElement !== avatarEl) {
+      avatarEl.style.position = 'relative';
+      avatarEl.style.overflow = 'visible';
+      avatarEl.appendChild(articleBadge);
     }
 
     // Update article badge styling & contents
-    articleBadge.className = `jev-inspect-badge ${decision.shouldFilter ? 'filtered' : ''}`;
-    const span = articleBadge.querySelector('span') || articleBadge;
-    span.textContent = ''; // Clear prior children safely
+    const isAvatarMounted = Boolean(avatarEl && articleBadge.parentElement === avatarEl);
+    articleBadge.className = `jev-inspect-badge ${isAvatarMounted ? 'jev-avatar-badge' : ''} ${decision.shouldFilter ? 'filtered' : ''}`.trim();
+
+    let iconSpan = articleBadge.querySelector('.jev-inspect-icon') as HTMLElement | null;
+    let tooltipSpan = articleBadge.querySelector('.jev-inspect-tooltip') as HTMLElement | null;
+    if (!iconSpan || !tooltipSpan) {
+      articleBadge.textContent = '';
+      iconSpan = document.createElement('span');
+      iconSpan.className = 'jev-inspect-icon';
+      tooltipSpan = document.createElement('span');
+      tooltipSpan.className = 'jev-inspect-tooltip';
+      articleBadge.appendChild(iconSpan);
+      articleBadge.appendChild(tooltipSpan);
+    }
+
+    iconSpan.textContent = decision.shouldFilter ? '🚫' : '✅';
+    tooltipSpan.textContent = '';
 
     const visionInfo = formatVisionInfo(decision.visionResult);
     if (decision.shouldFilter) {
@@ -191,11 +224,11 @@ export function applyFilterUI(
         : '';
       const pct = decision.primaryProbability ? ` ${formatPercent(decision.primaryProbability)}` : '';
 
-      span.appendChild(document.createTextNode('🚫 判定: '));
+      tooltipSpan.appendChild(document.createTextNode('🚫 判定: '));
       const b = document.createElement('b');
       b.textContent = catName;
-      span.appendChild(b);
-      span.appendChild(document.createTextNode(`${pct}${visionInfo} (${timeStr})`));
+      tooltipSpan.appendChild(b);
+      tooltipSpan.appendChild(document.createTextNode(`${pct}${visionInfo} (${timeStr})`));
     } else {
       let topCat = '';
       let topScore = 0;
@@ -210,7 +243,7 @@ export function applyFilterUI(
       const topCatName = topCat ? CATEGORY_MAP.get(topCat as any)?.name || topCat : '';
       const topInfo = topCat ? ` (${topCatName} ${formatPercent(topScore)})` : '';
 
-      span.appendChild(document.createTextNode(`✅${topInfo}${visionInfo} [${timeStr}]`));
+      tooltipSpan.appendChild(document.createTextNode(`✅ セーフ${topInfo}${visionInfo} [${timeStr}]`));
     }
   }
 }
