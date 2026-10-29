@@ -160,6 +160,7 @@ article .jev-inspect-badge,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
   font-size: 11px;
   line-height: 1;
 }
@@ -215,12 +216,20 @@ article[data-testid="tweet"] div:has(.jev-inspect-badge:hover) {
 }
 
 .jev-inspect-badge .badge-icon {
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 
 .jev-inspect-badge .badge-score {
-  opacity: 0.8;
-  font-size: 9px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+  margin-left: -1.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9);
 }
 
 

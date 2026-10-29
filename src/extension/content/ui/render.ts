@@ -214,11 +214,11 @@ export function applyFilterUI(
       articleBadge.appendChild(tooltipSpan);
     }
 
-    iconSpan.textContent = decision.shouldFilter ? '🚫' : '✅';
     tooltipSpan.textContent = '';
 
     const visionInfo = formatVisionInfo(decision.visionResult);
     if (decision.shouldFilter) {
+      iconSpan.textContent = '🚫';
       const catName = decision.primaryReason
         ? CATEGORY_MAP.get(decision.primaryReason)?.name || decision.primaryReason
         : '';
@@ -240,10 +240,28 @@ export function applyFilterUI(
           }
         }
       }
+
+      const categoryDef = topCat ? CATEGORY_MAP.get(topCat as any) : null;
+      const emoji = categoryDef?.badgeIcon || '✅';
+      const scoreNum = Math.min(99, Math.max(0, Math.round(topScore * 100)));
+      const scoreStr = scoreNum.toString().padStart(2, '0');
+
+      iconSpan.textContent = '';
+      const iconEl = document.createElement('span');
+      iconEl.className = 'badge-icon';
+      iconEl.textContent = emoji;
+
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'badge-score';
+      scoreEl.textContent = scoreStr;
+
+      iconSpan.appendChild(iconEl);
+      iconSpan.appendChild(scoreEl);
+
       const topCatName = topCat ? CATEGORY_MAP.get(topCat as any)?.name || topCat : '';
       const topInfo = topCat ? ` (${topCatName} ${formatPercent(topScore)})` : '';
 
-      tooltipSpan.appendChild(document.createTextNode(`✅ セーフ${topInfo}${visionInfo} [${timeStr}]`));
+      tooltipSpan.appendChild(document.createTextNode(`${emoji} セーフ${topInfo}${visionInfo} [${timeStr}]`));
     }
   }
 }

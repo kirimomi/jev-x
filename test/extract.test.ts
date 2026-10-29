@@ -169,7 +169,7 @@ describe('applyFilterUI badge placement', () => {
 
     const badge = avatar.querySelector('.jev-inspect-badge.jev-avatar-badge');
     expect(badge).not.toBeNull();
-    expect(badge?.querySelector('.jev-inspect-icon')?.textContent).toBe('✅');
+    expect(badge?.querySelector('.jev-inspect-icon')?.textContent).toBe('🤖12');
     expect(badge?.querySelector('.jev-inspect-tooltip')?.textContent).toContain('12%');
     expect(badge?.querySelector('.jev-inspect-tooltip')?.textContent).toContain('185ms');
     // Ensure right column has only User-Name and tweetText (no badge inserted above tweetText)
