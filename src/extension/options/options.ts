@@ -1,6 +1,7 @@
 import { FILTER_CATEGORIES, getDefaultUserSettings } from '../../core/categories.js';
 import { CategoryId, ImageVisionMode, UserFilterSettings } from '../../types/index.js';
-import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest } from '../messages.js';
+import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest, TestApiRequest, TestApiResponse } from '../messages.js';
+import { readDiag, clearDiag } from '../diag.js';
 
 let settings: UserFilterSettings = getDefaultUserSettings();
 const categoryUpdaters: Array<() => void> = [];
@@ -277,5 +278,85 @@ if (resetDefaultsBtn) {
     }
   });
 }
+
+// ---- Diagnostics (Issue #16) ----
+
+const apiTestLevelLabels: Record<TestApiResponse['level'], string> = {
+  'no-key': 'キー未設定（モック動作中）',
+  unreachable: '到達NG（ネットワーク／タイムアウト）',
+  'auth-failed': '認証NG（キーが拒否されました）',
+  'evaluation-failed': '評価NG（応答が評価として成立しませんでした）',
+  ok: '評価OK',
+};
+
+async function renderDiag() {
+  const listEl = document.getElementById('diag-list');
+  if (!listEl) return;
+  const entries = await readDiag();
+  listEl.innerHTML = '';
+  if (entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.color = 'var(--text-muted)';
+    empty.textContent = '記録はまだありません。Xのタブを開いてから再読み込みしてください。';
+    listEl.appendChild(empty);
+    return;
+  }
+  for (const entry of [...entries].reverse()) {
+    const row = document.createElement('div');
+    const time = new Date(entry.ts).toLocaleTimeString('ja-JP', { hour12: false });
+    row.textContent = `${time}  ${entry.stage}${entry.detail ? `  ${entry.detail}` : ''}`;
+    if (entry.stage.endsWith('.error')) {
+      row.style.color = '#f4212e';
+    }
+    listEl.appendChild(row);
+  }
+}
+
+const diagRefreshBtn = document.getElementById('diag-refresh-btn');
+if (diagRefreshBtn) {
+  diagRefreshBtn.addEventListener('click', () => {
+    void renderDiag();
+  });
+}
+
+const diagClearBtn = document.getElementById('diag-clear-btn');
+if (diagClearBtn) {
+  diagClearBtn.addEventListener('click', async () => {
+    await clearDiag();
+    await renderDiag();
+  });
+}
+
+const apiTestBtn = document.getElementById('api-test-btn') as HTMLButtonElement | null;
+if (apiTestBtn) {
+  apiTestBtn.addEventListener('click', async () => {
+    const resultEl = document.getElementById('api-test-result');
+    apiTestBtn.disabled = true;
+    if (resultEl) resultEl.textContent = 'テスト中…';
+    try {
+      const req: TestApiRequest = { type: 'TEST_API' };
+      const res = (await chrome.runtime.sendMessage(req)) as TestApiResponse | { error?: string } | undefined;
+      if (resultEl) {
+        if (res && 'level' in res) {
+          resultEl.textContent = `${apiTestLevelLabels[res.level]}（${res.latencyMs}ms）${res.error ? `: ${res.error}` : ''}`;
+          resultEl.style.color = res.level === 'ok' ? 'var(--success)' : '#f4212e';
+        } else {
+          resultEl.textContent = `テスト失敗: ${res && 'error' in res && res.error ? res.error : '応答なし'}`;
+          resultEl.style.color = '#f4212e';
+        }
+      }
+    } catch (e) {
+      if (resultEl) {
+        resultEl.textContent = `テスト失敗: ${e instanceof Error ? e.message : String(e)}`;
+        resultEl.style.color = '#f4212e';
+      }
+    } finally {
+      apiTestBtn.disabled = false;
+      void renderDiag();
+    }
+  });
+}
+
+void renderDiag();
 
 loadSettings();

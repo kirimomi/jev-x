@@ -419,8 +419,25 @@
         <!-- Rendered by options.ts -->
       </div>
     </div>
-    
-    
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h2 class="card-title" style="margin-bottom: 0;">🩺 診断</h2>
+        <div style="display: flex; gap: 8px;">
+          <button id="diag-refresh-btn" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; font-size: 12px;">再読み込み</button>
+          <button id="diag-clear-btn" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; font-size: 12px;">消去</button>
+        </div>
+      </div>
+      <div class="category-desc" style="margin-bottom: 12px;">
+        処理パイプラインの到達記録です（新しい順）。Xのタブを開いたあとにここを見ると、どこで止まっているか分かります。目安: injected が無い＝スクリプトがページに入っていない / send はあるが receive が無い＝コンテンツ→バックグラウンド通信の問題 / receive はあるが evalDone が無い＝バックグラウンド内で停止 / response まで来て画面が変わらない＝描画側の問題。
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+        <button id="api-test-btn" class="btn" style="padding: 7px 14px; font-size: 13px;">API接続テスト</button>
+        <span id="api-test-result" style="font-size: 13px;"></span>
+      </div>
+      <div id="diag-list" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.7; word-break: break-all;"></div>
+    </div>
+
   </div>
 
   <script type="module" src="/src/extension/options/options.ts"></script>

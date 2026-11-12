@@ -1,4 +1,4 @@
-import { TweetData, FilterDecision, UserFilterSettings } from '../types/index.js';
+import { TweetData, FilterDecision, UserFilterSettings, ApiConnectionTestResult } from '../types/index.js';
 
 export interface EvaluateTweetsRequest {
   type: 'EVALUATE_TWEETS';
@@ -53,6 +53,12 @@ export interface AnalyzeImageUrlResponse {
   score: number;
 }
 
+export interface TestApiRequest {
+  type: 'TEST_API';
+}
+
+export type TestApiResponse = ApiConnectionTestResult;
+
 export interface ErrorResponse {
   error: string;
 }
@@ -62,7 +68,8 @@ export type ExtensionRequest =
   | GetSettingsRequest
   | SaveSettingsRequest
   | PatchSettingsRequest
-  | AnalyzeImageUrlRequest;
+  | AnalyzeImageUrlRequest
+  | TestApiRequest;
 
 export type MessageMap = {
   EVALUATE_TWEETS: { request: EvaluateTweetsRequest; response: EvaluateTweetsResponse };
@@ -70,6 +77,7 @@ export type MessageMap = {
   SAVE_SETTINGS: { request: SaveSettingsRequest; response: SaveSettingsResponse };
   PATCH_SETTINGS: { request: PatchSettingsRequest; response: PatchSettingsResponse };
   ANALYZE_IMAGE_URL: { request: AnalyzeImageUrlRequest; response: AnalyzeImageUrlResponse };
+  TEST_API: { request: TestApiRequest; response: TestApiResponse };
 };
 
 /**

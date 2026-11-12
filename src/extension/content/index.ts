@@ -1,10 +1,12 @@
 import './style.css';
 import { logger } from '../../shared/logger.js';
+import { markDiag } from '../diag.js';
 import { scanTweets, throttledScan, reapplySettingsToRenderedPosts } from './scheduler.js';
 
 export { extractTweetData } from './dom/extract.js';
 
 logger.info('🚀 Content script injected and active on:', window.location.href);
+markDiag('content.injected', window.location.href);
 
 // Listen for instant settings updates broadcasted from background (popup/options changes)
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {

@@ -2,6 +2,7 @@ import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
 import { UserFilterSettings, TweetData } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
+import { markDiag } from '../diag.js';
 import { normalizeSettings, CURRENT_SETTINGS_VERSION } from '../../core/settings.js';
 import { analyzeImageWithLocalNsfw } from './localNsfwService.js';
 import { prepareImageForJev } from './jevImageService.js';
@@ -57,6 +58,7 @@ async function initEngine(): Promise<void> {
     mockMode: !currentApiKey,
   });
 
+  markDiag('background.init', `mockMode=${!currentApiKey} hasApiKey=${Boolean(currentApiKey)}`);
   console.log('[jev-x background] Initialized engine, mockMode:', !currentApiKey, 'showBadges:', currentSettings.showDebugBadges);
 }
 
@@ -76,6 +78,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
     try {
       // Validate sender identity
       if (sender.id !== chrome.runtime?.id) {
+        markDiag(
+          'background.error',
+          `unauthorized sender for ${message.type}: senderId=${sender.id ?? 'none'} tab=${sender.tab?.id ?? 'none'}`
+        );
         sendResponse({ error: 'Unauthorized sender' });
         return;
       }
@@ -84,6 +90,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
 
       switch (message.type) {
         case 'EVALUATE_TWEETS': {
+          markDiag('background.receive', `tweets=${message.tweets.length}`);
           const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
           let tweetsToEvaluate: TweetData[] = message.tweets;
 
@@ -115,6 +122,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           }
 
           const decisions = await filterEngine!.evaluateBatch(tweetsToEvaluate, currentSettings);
+          markDiag('background.evalDone', `decisions=${decisions.length}`);
           sendResponse({
             decisions,
             showDebugBadges: currentSettings.showDebugBadges !== false,
@@ -184,6 +192,23 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           break;
         }
 
+        case 'TEST_API': {
+          // Spends a small amount of API quota; only allow it from extension UI pages
+          const isFromExtensionPage = !sender.tab || Boolean(sender.url?.startsWith('chrome-extension://'));
+          if (!isFromExtensionPage) {
+            sendResponse({ error: 'Unauthorized: TEST_API is only permitted from extension pages' });
+            return;
+          }
+
+          const result = await filterEngine!.testConnection();
+          markDiag(
+            'background.apiTest',
+            `level=${result.level} latencyMs=${result.latencyMs}${result.error ? ` error=${result.error}` : ''}`
+          );
+          sendResponse(result);
+          break;
+        }
+
         case 'ANALYZE_IMAGE_URL': {
           // Restrict image fetching only to legitimate Twitter/X media CDNs
           if (!message.url || !message.url.startsWith('https://pbs.twimg.com/')) {
@@ -207,6 +232,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           sendResponse({ error: 'Unknown request type' });
       }
     } catch (err) {
+      markDiag('background.error', `${message.type}: ${err instanceof Error ? err.message : String(err)}`);
       console.error('[jev-x background] Message processing error:', err);
       sendResponse({ error: String(err) });
     }

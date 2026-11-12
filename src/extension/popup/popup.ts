@@ -40,7 +40,9 @@ async function initPopup() {
       }
 
       if (res.hasApiKey) {
-        apiStatusBadge.textContent = 'API接続OK';
+        // This badge only proves the key is loaded; real connectivity is
+        // verified by the connection test on the options page (Issue #16).
+        apiStatusBadge.textContent = 'キー保存済み';
         apiStatusBadge.className = 'status-badge';
       } else {
         apiStatusBadge.textContent = 'モック動作中';

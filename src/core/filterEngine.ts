@@ -4,6 +4,7 @@ import {
   CategoryId,
   UserFilterSettings,
   FilterDecision,
+  ApiConnectionTestResult,
 } from '../types/index.js';
 import { CATEGORY_MAP } from './categories.js';
 import { mockEvaluate } from './mockEvaluator.js';
@@ -188,6 +189,67 @@ export class FilterEngine {
     }
 
     return decide(categoryScores, tweet, settings, latencyMs);
+  }
+
+  /**
+   * Runs one minimal real evaluation to report how far API connectivity
+   * actually gets (Issue #16): key presence alone is not "connected".
+   */
+  async testConnection(): Promise<ApiConnectionTestResult> {
+    if (this.mockMode || !this.client) {
+      return { level: 'no-key', latencyMs: 0 };
+    }
+
+    const startTime = performance.now();
+    const elapsed = () => Math.round(performance.now() - startTime);
+
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Jev API timeout (connection test)')), 10000)
+      );
+      const response = await Promise.race([
+        this.client.systemOne({
+          state: '[投稿者]: @jev_x_test\n\n[本文]:\nこれは接続確認用のテスト文です。',
+          questions: { probe: noul('この文は接続確認のためのテスト文である') },
+        }),
+        timeoutPromise,
+      ]);
+
+      const ans = (response as { answers?: Record<string, unknown> }).answers?.probe as
+        | { type?: string; noul?: unknown }
+        | undefined;
+      if (ans && ans.type === 'noul' && typeof ans.noul === 'number') {
+        return { level: 'ok', latencyMs: elapsed() };
+      }
+      return {
+        level: 'evaluation-failed',
+        latencyMs: elapsed(),
+        error: '応答に評価結果（noul）が含まれていませんでした',
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const lower = message.toLowerCase();
+      if (
+        lower.includes('401') ||
+        lower.includes('403') ||
+        lower.includes('unauthorized') ||
+        lower.includes('forbidden') ||
+        lower.includes('api key') ||
+        lower.includes('api_key')
+      ) {
+        return { level: 'auth-failed', latencyMs: elapsed(), error: message };
+      }
+      if (
+        error instanceof TypeError ||
+        lower.includes('timeout') ||
+        lower.includes('failed to fetch') ||
+        lower.includes('network') ||
+        lower.includes('load failed')
+      ) {
+        return { level: 'unreachable', latencyMs: elapsed(), error: message };
+      }
+      return { level: 'evaluation-failed', latencyMs: elapsed(), error: message };
+    }
   }
 
   /**

@@ -131,3 +131,19 @@ export interface FilterDecision {
   evaluatedAt: number; // timestamp
   latencyMs: number;
 }
+
+/**
+ * How far an API connection test got (Issue #16).
+ * - 'no-key': no API key configured (mock mode)
+ * - 'unreachable': the request itself failed (network error / timeout)
+ * - 'auth-failed': the API responded but rejected the key (401/403 etc.)
+ * - 'evaluation-failed': request went through but no usable answer came back
+ * - 'ok': a real evaluation returned an answer
+ */
+export type ApiTestLevel = 'no-key' | 'unreachable' | 'auth-failed' | 'evaluation-failed' | 'ok';
+
+export interface ApiConnectionTestResult {
+  level: ApiTestLevel;
+  latencyMs: number;
+  error?: string;
+}
