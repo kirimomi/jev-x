@@ -123,11 +123,34 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
 
           const decisions = await filterEngine!.evaluateBatch(tweetsToEvaluate, currentSettings);
           markDiag('background.evalDone', `decisions=${decisions.length}`);
-          sendResponse({
+          const responsePayload = {
             decisions,
             showDebugBadges: currentSettings.showDebugBadges !== false,
             showFoldBanner: currentSettings.showFoldBanner !== false,
-          });
+          };
+          sendResponse(responsePayload);
+
+          // Fallback delivery (Issue #17): also push the result to the tab.
+          // Some browsers drop the sendMessage response addressed to content
+          // scripts; the content side takes whichever path arrives first.
+          if (message.requestId && sender.tab?.id != null) {
+            try {
+              const ack = await chrome.tabs.sendMessage(sender.tab.id, {
+                type: 'EVALUATE_TWEETS_RESULT',
+                requestId: message.requestId,
+                ...responsePayload,
+              });
+              markDiag(
+                'background.pushResult',
+                `requestId=${message.requestId} ack=${JSON.stringify(ack) ?? 'none'}`
+              );
+            } catch (pushErr) {
+              markDiag(
+                'background.error',
+                `pushResult failed: ${pushErr instanceof Error ? pushErr.message : String(pushErr)}`
+              );
+            }
+          }
           break;
         }
 

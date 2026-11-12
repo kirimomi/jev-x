@@ -3,9 +3,25 @@ import { TweetData, FilterDecision, UserFilterSettings, ApiConnectionTestResult 
 export interface EvaluateTweetsRequest {
   type: 'EVALUATE_TWEETS';
   tweets: TweetData[];
+  /** Correlates the request with a pushed result (EvaluateTweetsResultMessage). */
+  requestId?: string;
 }
 
 export interface EvaluateTweetsResponse {
+  decisions: FilterDecision[];
+  showDebugBadges?: boolean;
+  showFoldBanner?: boolean;
+}
+
+/**
+ * Result pushed from the background to the tab via chrome.tabs.sendMessage
+ * (Issue #17). Some browsers (Orion on iPad) drop the sendMessage response
+ * addressed to content scripts even though the background did evaluate and
+ * call sendResponse; this one-way push is the fallback delivery path.
+ */
+export interface EvaluateTweetsResultMessage {
+  type: 'EVALUATE_TWEETS_RESULT';
+  requestId: string;
   decisions: FilterDecision[];
   showDebugBadges?: boolean;
   showFoldBanner?: boolean;
