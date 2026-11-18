@@ -9,6 +9,13 @@ export interface OgpCardInfo {
 }
 
 /**
+ * Evaluation engine:
+ * - 'jev': TypeSafe AI (Jev) systemOne
+ * - 'decisions': Gemini Decisions API (gemini-decision-1)
+ */
+export type EvaluationEngine = 'jev' | 'decisions';
+
+/**
  * Image vision evaluation mode:
  * - 'local': Local NSFWJS in Offscreen Document (only affects adult_nsfw exposure)
  * - 'jev': Experimental direct image attachment to Jev API (affects AI slop, scam text in images, adult, etc.)
@@ -105,6 +112,8 @@ export interface UserFilterSettings {
   settingsVersion?: number;
   /** Global multiplier applied to category thresholds (0.0 to 1.0, representing 0-100%). Defaults to 1.0 */
   globalSensitivityMultiplier?: number;
+  /** Evaluation engine selection ('jev' | 'decisions'). Defaults to 'jev'. */
+  evaluationEngine?: EvaluationEngine;
 }
 
 /**
@@ -146,4 +155,6 @@ export interface ApiConnectionTestResult {
   level: ApiTestLevel;
   latencyMs: number;
   error?: string;
+  /** Which engine the test ran against */
+  engine?: EvaluationEngine;
 }

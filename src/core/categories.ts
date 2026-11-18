@@ -107,5 +107,6 @@ export function getDefaultUserSettings(): UserFilterSettings {
     imageVisionMode: 'local',
     settingsVersion: 3,
     globalSensitivityMultiplier: 1.0,
+    evaluationEngine: 'jev',
   };
 }

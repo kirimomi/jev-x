@@ -5,15 +5,45 @@ import {
   UserFilterSettings,
   FilterDecision,
   ApiConnectionTestResult,
+  EvaluationEngine,
 } from '../types/index.js';
 import { CATEGORY_MAP } from './categories.js';
 import { mockEvaluate } from './mockEvaluator.js';
 import { decide, createUnfilteredDecision } from './decision.js';
 
 export interface FilterEngineOptions {
+  /** TypeSafe AI (Jev) API key */
   apiKey?: string;
+  /** Gemini API key (Decisions engine) */
+  geminiApiKey?: string;
+  /** Which evaluation engine to use. Defaults to 'jev'. */
+  engine?: EvaluationEngine;
   mockMode?: boolean;
 }
+
+const DECISIONS_API_URL = 'https://generativelanguage.googleapis.com/v1beta/decisions';
+const DECISIONS_MODEL = 'gemini-decision-1';
+const DECISIONS_TIMEOUT_MS = 8000;
+
+interface DecisionsAnswer {
+  type: string;
+  noul?: number;
+  confidence?: number;
+}
+
+interface DecisionsResponse {
+  answers?: Record<string, DecisionsAnswer>;
+}
+
+interface DecisionsErrorBody {
+  error?: {
+    code?: number | string;
+    message?: string;
+    status?: string;
+  };
+}
+
+type DecisionsHttpError = Error & { status?: number; apiCode?: number | string };
 
 /**
  * Builds structured State context for Jev evaluation
@@ -67,14 +97,25 @@ export function buildTweetState(tweet: TweetData): string {
 
 export class FilterEngine {
   private client: TypeSafeClient | null = null;
-  private mockMode: boolean;
+  private geminiApiKey?: string;
+  readonly engine: EvaluationEngine;
+  readonly mockMode: boolean;
+  /** Meta of the most recent real API evaluation, for diagnostics (Issue #18) */
+  lastRunMeta?: {
+    engine: EvaluationEngine;
+    confidences: Partial<Record<CategoryId, number>>;
+    error?: string;
+  };
   // Cache raw evaluated scores and measured latency keyed by composite state hash (tweet.id + state signature)
   private scoreCache = new Map<string, { scores: Record<CategoryId, number>; latencyMs: number }>();
 
   constructor(options: FilterEngineOptions = {}) {
-    this.mockMode = Boolean(options.mockMode || !options.apiKey);
+    this.engine = options.engine ?? 'jev';
+    this.geminiApiKey = options.geminiApiKey;
+    const activeKey = this.engine === 'decisions' ? options.geminiApiKey : options.apiKey;
+    this.mockMode = Boolean(options.mockMode || !activeKey);
 
-    if (options.apiKey && !this.mockMode) {
+    if (options.apiKey && this.engine === 'jev' && !this.mockMode) {
       this.client = new TypeSafeClient({
         apiKey: options.apiKey,
         dangerouslyAllowBrowser: true,
@@ -120,65 +161,27 @@ export class FilterEngine {
         return createUnfilteredDecision(tweet.id, 0, tweet.vision);
       }
 
-      if (this.mockMode || !this.client) {
+      if (this.mockMode) {
         categoryScores = mockEvaluate(tweet, activeCategoryIds);
         latencyMs = Math.round(performance.now() - startTime);
         this.scoreCache.set(cacheKey, { scores: categoryScores, latencyMs });
       } else {
         const stateText = buildTweetState(tweet);
-        const questions: Record<string, NoulQuestion> = {};
-        for (const catId of activeCategoryIds) {
-          const catDef = CATEGORY_MAP.get(catId);
-          if (catDef) {
-            questions[catId] = noul(catDef.instruction);
-          }
-        }
 
         try {
-          const callSystemOne = async (useImage: boolean) => {
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Jev API timeout')), 8000)
-            );
-            const reqCall =
-              useImage && tweet.jevImageBytes
-                ? this.client!.systemOne(
-                    {
-                      state: {
-                        post: stateText,
-                        attached_image: image(tweet.jevImageBytes),
-                      },
-                      questions,
-                    },
-                    {
-                      headers: { 'TypeSafe-Danger-Zone-Images': 'true' },
-                    }
-                  )
-                : this.client!.systemOne({ state: stateText, questions });
-
-            return Promise.race([reqCall, timeoutPromise]);
-          };
-
-          let response;
-          if (tweet.jevImageBytes) {
-            try {
-              response = await callSystemOne(true);
-            } catch (imgErr) {
-              console.warn(`[FilterEngine] Jev image evaluation failed for ${tweet.id}, falling back to text-only:`, imgErr);
-              response = await callSystemOne(false);
-            }
-          } else {
-            response = await callSystemOne(false);
-          }
-
-          categoryScores = {} as Record<CategoryId, number>;
-          for (const catId of activeCategoryIds) {
-            const ans = response.answers[catId];
-            categoryScores[catId] = ans?.type === 'noul' ? ans.noul : 0;
-          }
+          categoryScores =
+            this.engine === 'decisions'
+              ? await this.evaluateWithDecisions(stateText, activeCategoryIds)
+              : await this.evaluateWithJev(tweet, stateText, activeCategoryIds);
           latencyMs = Math.round(performance.now() - startTime);
           this.scoreCache.set(cacheKey, { scores: categoryScores, latencyMs });
         } catch (error) {
-          console.error(`[FilterEngine] Jev API error for tweet ${tweet.id}:`, error);
+          console.error(`[FilterEngine] ${this.engine} API error for tweet ${tweet.id}:`, error);
+          this.lastRunMeta = {
+            engine: this.engine,
+            confidences: {},
+            error: error instanceof Error ? error.message : String(error),
+          };
           return createUnfilteredDecision(
             tweet.id,
             Math.round(performance.now() - startTime),
@@ -192,12 +195,162 @@ export class FilterEngine {
   }
 
   /**
+   * Evaluates with the TypeSafe Jev systemOne API (text, plus an optional
+   * direct image attachment with a text-only fallback).
+   */
+  private async evaluateWithJev(
+    tweet: TweetData,
+    stateText: string,
+    activeCategoryIds: CategoryId[]
+  ): Promise<Record<CategoryId, number>> {
+    const questions: Record<string, NoulQuestion> = {};
+    for (const catId of activeCategoryIds) {
+      const catDef = CATEGORY_MAP.get(catId);
+      if (catDef) {
+        questions[catId] = noul(catDef.instruction);
+      }
+    }
+
+    const callSystemOne = async (useImage: boolean) => {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Jev API timeout')), 8000)
+      );
+      const reqCall =
+        useImage && tweet.jevImageBytes
+          ? this.client!.systemOne(
+              {
+                state: {
+                  post: stateText,
+                  attached_image: image(tweet.jevImageBytes),
+                },
+                questions,
+              },
+              {
+                headers: { 'TypeSafe-Danger-Zone-Images': 'true' },
+              }
+            )
+          : this.client!.systemOne({ state: stateText, questions });
+
+      return Promise.race([reqCall, timeoutPromise]);
+    };
+
+    let response;
+    if (tweet.jevImageBytes) {
+      try {
+        response = await callSystemOne(true);
+      } catch (imgErr) {
+        console.warn(`[FilterEngine] Jev image evaluation failed for ${tweet.id}, falling back to text-only:`, imgErr);
+        response = await callSystemOne(false);
+      }
+    } else {
+      response = await callSystemOne(false);
+    }
+
+    const scores = {} as Record<CategoryId, number>;
+    const confidences: Partial<Record<CategoryId, number>> = {};
+    for (const catId of activeCategoryIds) {
+      const ans = response.answers[catId];
+      scores[catId] = ans?.type === 'noul' ? ans.noul : 0;
+      const conf = (ans as { confidence?: unknown } | undefined)?.confidence;
+      if (typeof conf === 'number') confidences[catId] = conf;
+    }
+    this.lastRunMeta = { engine: 'jev', confidences };
+    return scores;
+  }
+
+  /**
+   * Evaluates with the Gemini Decisions API (Issue #18). Text-only in this
+   * first phase: image bytes are never attached, so a safety block on the
+   * text itself surfaces as an error and the caller falls back to unfiltered.
+   */
+  private async evaluateWithDecisions(
+    stateText: string,
+    activeCategoryIds: CategoryId[]
+  ): Promise<Record<CategoryId, number>> {
+    const questions: Record<string, { type: 'noul'; instructions: string }> = {};
+    for (const catId of activeCategoryIds) {
+      const catDef = CATEGORY_MAP.get(catId);
+      if (catDef) {
+        questions[catId] = { type: 'noul', instructions: catDef.instruction };
+      }
+    }
+
+    const data = await this.callDecisions(stateText, questions);
+
+    const scores = {} as Record<CategoryId, number>;
+    const confidences: Partial<Record<CategoryId, number>> = {};
+    for (const catId of activeCategoryIds) {
+      const ans = data.answers?.[catId];
+      scores[catId] = ans?.type === 'noul' && typeof ans.noul === 'number' ? ans.noul : 0;
+      if (ans && typeof ans.confidence === 'number') confidences[catId] = ans.confidence;
+    }
+    this.lastRunMeta = { engine: 'decisions', confidences };
+    return scores;
+  }
+
+  /**
+   * One POST to the Decisions API. Throws a DecisionsHttpError carrying the
+   * HTTP status (and API error code) on failure so callers can classify it.
+   */
+  private async callDecisions(
+    input: string,
+    questions: Record<string, { type: 'noul'; instructions: string }>
+  ): Promise<DecisionsResponse> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DECISIONS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(DECISIONS_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.geminiApiKey ?? '',
+        },
+        body: JSON.stringify({ model: DECISIONS_MODEL, input, questions }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Decisions API timeout');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const data = (await response.json().catch(() => null)) as
+      | DecisionsResponse
+      | DecisionsErrorBody
+      | null;
+    if (!response.ok || !data || !('answers' in data) || !data.answers) {
+      const apiError = (data as DecisionsErrorBody | null)?.error;
+      const detail = apiError?.message ?? `HTTP ${response.status}`;
+      const error = new Error(
+        `Decisions API error (${response.status}): ${detail}`
+      ) as DecisionsHttpError;
+      error.status = response.status;
+      error.apiCode = apiError?.code;
+      throw error;
+    }
+    return data;
+  }
+
+  /**
    * Runs one minimal real evaluation to report how far API connectivity
    * actually gets (Issue #16): key presence alone is not "connected".
    */
   async testConnection(): Promise<ApiConnectionTestResult> {
-    if (this.mockMode || !this.client) {
-      return { level: 'no-key', latencyMs: 0 };
+    if (this.mockMode) {
+      return { level: 'no-key', latencyMs: 0, engine: this.engine };
+    }
+    return this.engine === 'decisions'
+      ? this.testConnectionDecisions()
+      : this.testConnectionJev();
+  }
+
+  private async testConnectionJev(): Promise<ApiConnectionTestResult> {
+    if (!this.client) {
+      return { level: 'no-key', latencyMs: 0, engine: 'jev' };
     }
 
     const startTime = performance.now();
@@ -219,12 +372,13 @@ export class FilterEngine {
         | { type?: string; noul?: unknown }
         | undefined;
       if (ans && ans.type === 'noul' && typeof ans.noul === 'number') {
-        return { level: 'ok', latencyMs: elapsed() };
+        return { level: 'ok', latencyMs: elapsed(), engine: 'jev' };
       }
       return {
         level: 'evaluation-failed',
         latencyMs: elapsed(),
         error: '応答に評価結果（noul）が含まれていませんでした',
+        engine: 'jev',
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -237,7 +391,7 @@ export class FilterEngine {
         lower.includes('api key') ||
         lower.includes('api_key')
       ) {
-        return { level: 'auth-failed', latencyMs: elapsed(), error: message };
+        return { level: 'auth-failed', latencyMs: elapsed(), error: message, engine: 'jev' };
       }
       if (
         error instanceof TypeError ||
@@ -246,9 +400,49 @@ export class FilterEngine {
         lower.includes('network') ||
         lower.includes('load failed')
       ) {
-        return { level: 'unreachable', latencyMs: elapsed(), error: message };
+        return { level: 'unreachable', latencyMs: elapsed(), error: message, engine: 'jev' };
       }
-      return { level: 'evaluation-failed', latencyMs: elapsed(), error: message };
+      return { level: 'evaluation-failed', latencyMs: elapsed(), error: message, engine: 'jev' };
+    }
+  }
+
+  private async testConnectionDecisions(): Promise<ApiConnectionTestResult> {
+    const startTime = performance.now();
+    const elapsed = () => Math.round(performance.now() - startTime);
+
+    try {
+      const data = await this.callDecisions(
+        '[投稿者]: @jev_x_test\n\n[本文]:\nこれは接続確認用のテスト文です。',
+        { probe: { type: 'noul', instructions: 'この文は接続確認のためのテスト文である' } }
+      );
+
+      const ans = data.answers?.probe;
+      if (ans && ans.type === 'noul' && typeof ans.noul === 'number') {
+        return { level: 'ok', latencyMs: elapsed(), engine: 'decisions' };
+      }
+      return {
+        level: 'evaluation-failed',
+        latencyMs: elapsed(),
+        error: '応答に評価結果（noul）が含まれていませんでした',
+        engine: 'decisions',
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = (error as DecisionsHttpError).status;
+      if (status === 401 || status === 403) {
+        return { level: 'auth-failed', latencyMs: elapsed(), error: message, engine: 'decisions' };
+      }
+      const lower = message.toLowerCase();
+      if (
+        error instanceof TypeError ||
+        lower.includes('timeout') ||
+        lower.includes('failed to fetch') ||
+        lower.includes('network') ||
+        lower.includes('load failed')
+      ) {
+        return { level: 'unreachable', latencyMs: elapsed(), error: message, engine: 'decisions' };
+      }
+      return { level: 'evaluation-failed', latencyMs: elapsed(), error: message, engine: 'decisions' };
     }
   }
 

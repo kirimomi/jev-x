@@ -233,16 +233,35 @@ async function runTest() {
   console.log('='.repeat(78));
 
   const forceMock = process.argv.includes('--mock');
-  const apiKey = process.env.TYPESAFE_API_KEY;
-  const isKeyAvailable = Boolean(apiKey && apiKey !== 'your_typesafe_api_key_here' && !forceMock);
+  const engineArg = process.argv.find((a) => a.startsWith('--engine='))?.split('=')[1];
+  const useDecisions = engineArg === 'decisions';
+  const apiKey = useDecisions ? process.env.GEMINI_API_KEY : process.env.TYPESAFE_API_KEY;
+  const isKeyAvailable = Boolean(
+    apiKey &&
+      apiKey !== 'your_typesafe_api_key_here' &&
+      apiKey !== 'your_gemini_api_key_here' &&
+      !forceMock
+  );
 
-  console.log(`\nモード: ${isKeyAvailable ? '🟢 Jev 実APIモード (TypeSafe API)' : '🟡 モック (疑似判定) モード'}`);
+  console.log(
+    `\nモード: ${
+      isKeyAvailable
+        ? useDecisions
+          ? '🟢 Decisions 実APIモード (Gemini Decisions API)'
+          : '🟢 Jev 実APIモード (TypeSafe API)'
+        : '🟡 モック (疑似判定) モード'
+    }`
+  );
   if (!isKeyAvailable && !forceMock) {
-    console.log('※ .env に有効な TYPESAFE_API_KEY が未設定のため、自動的にモックで実行します。');
+    console.log(
+      `※ .env に有効な ${useDecisions ? 'GEMINI_API_KEY' : 'TYPESAFE_API_KEY'} が未設定のため、自動的にモックで実行します。`
+    );
   }
 
   const engine = new FilterEngine({
-    apiKey: isKeyAvailable ? apiKey : undefined,
+    apiKey: !useDecisions && isKeyAvailable ? apiKey : undefined,
+    geminiApiKey: useDecisions && isKeyAvailable ? apiKey : undefined,
+    engine: useDecisions ? 'decisions' : 'jev',
     mockMode: !isKeyAvailable,
   });
 

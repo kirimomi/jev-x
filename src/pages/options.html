@@ -279,11 +279,41 @@
 
     <div class="card">
       <h2 class="card-title">🔑 API</h2>
-      <div class="form-group" style="margin-bottom: 0;">
+      <label>評価エンジン</label>
+      <div class="radio-group" id="evaluation-engine-group" style="grid-template-columns: repeat(2, 1fr); margin-top: 0;">
+        <label class="radio-option">
+          <div class="radio-option-header">
+            <input type="radio" name="evaluation-engine" value="jev" checked />
+            <span class="radio-option-title">🧠 Jev (TypeSafe AI)</span>
+          </div>
+          <span class="radio-option-badge">従来</span>
+          <div class="radio-option-desc">
+            TypeSafe AI の systemOne で判定します。TypeSafe AI API Key が必要です。
+          </div>
+        </label>
+        <label class="radio-option">
+          <div class="radio-option-header">
+            <input type="radio" name="evaluation-engine" value="decisions" />
+            <span class="radio-option-title">✨ Gemini Decisions</span>
+          </div>
+          <span class="radio-option-badge">テキストのみ</span>
+          <div class="radio-option-desc">
+            Gemini Decision 1（Decisions API）で判定します。Gemini API Key（有料プロジェクト）が必要です。画像の直接判定は行いません。
+          </div>
+        </label>
+      </div>
+      <div class="form-group">
         <label for="api-key">TypeSafe AI API Key</label>
         <div style="display: flex; gap: 8px;">
           <input type="password" id="api-key" placeholder="ts_********************************" autocomplete="off" style="flex: 1;" />
           <button id="save-api-key-btn" class="btn" disabled style="opacity: 0.5; padding: 8px 16px; white-space: nowrap; flex-shrink: 0;">保存</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="gemini-api-key">Gemini API Key</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="password" id="gemini-api-key" placeholder="AIza********************************" autocomplete="off" style="flex: 1;" />
+          <button id="save-gemini-api-key-btn" class="btn" disabled style="opacity: 0.5; padding: 8px 16px; white-space: nowrap; flex-shrink: 0;">保存</button>
         </div>
         <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0 0;">
           ※キーはブラウザのローカルストレージ（chrome.storage.local）にのみ保存され、外部には送信されません。

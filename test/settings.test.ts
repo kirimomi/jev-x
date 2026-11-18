@@ -2,6 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { normalizeSettings, CURRENT_SETTINGS_VERSION } from '../src/core/settings.js';
 import { getDefaultUserSettings } from '../src/core/categories.js';
 
+describe('normalizeSettings evaluationEngine (Issue #18)', () => {
+  it('defaults to jev when missing or invalid', () => {
+    expect(normalizeSettings({}).evaluationEngine).toBe('jev');
+    expect(normalizeSettings({ evaluationEngine: 'bogus' }).evaluationEngine).toBe('jev');
+  });
+
+  it('preserves decisions when stored', () => {
+    expect(normalizeSettings({ evaluationEngine: 'decisions' }).evaluationEngine).toBe('decisions');
+    expect(normalizeSettings({ evaluationEngine: 'jev' }).evaluationEngine).toBe('jev');
+  });
+});
+
 describe('normalizeSettings', () => {
   it('returns default settings when stored is null or invalid', () => {
     const defaults = getDefaultUserSettings();

@@ -96,6 +96,6 @@ import { FilterEngine } from '../src/core/filterEngine.js';
 describe('FilterEngine.testConnection', () => {
   it('reports no-key when no API key is configured', async () => {
     const engine = new FilterEngine({});
-    await expect(engine.testConnection()).resolves.toEqual({ level: 'no-key', latencyMs: 0 });
+    await expect(engine.testConnection()).resolves.toEqual({ level: 'no-key', latencyMs: 0, engine: 'jev' });
   });
 });

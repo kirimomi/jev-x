@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FilterEngine } from '../src/core/filterEngine.js';
 import { getDefaultUserSettings } from '../src/core/categories.js';
 import { computeJevTargetDimensions, normalizeTwimgUrlForJev } from '../src/extension/background/jevImageService.js';
@@ -116,6 +116,118 @@ describe('FilterEngine (mockMode)', () => {
     expect(evalSpy.mock.calls[1][0].state).not.toHaveProperty('attached_image');
     expect(decision.shouldFilter).toBe(true);
     expect(decision.primaryReason).toBe('ai_slop');
+  });
+});
+
+describe('FilterEngine (decisions engine, Issue #18)', () => {
+  const slopTweet: TweetData = {
+    id: 'dec-1',
+    authorUsername: 'slop_creator',
+    text: 'chatgptでai美女を自動生成して量産する方法！',
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetchOk(answers: Record<string, { type: string; noul: number; confidence: number }>) {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ answers }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('maps Decisions API noul answers to category scores and records confidences', async () => {
+    const fetchMock = stubFetchOk({
+      adult_nsfw: { type: 'noul', noul: 0.01, confidence: 0.99 },
+      ai_slop: { type: 'noul', noul: 0.93, confidence: 0.9 },
+    });
+    const engine = new FilterEngine({ engine: 'decisions', geminiApiKey: 'gemini_test_key' });
+    expect(engine.mockMode).toBe(false);
+
+    const decision = await engine.evaluateTweet(slopTweet, getDefaultUserSettings());
+    expect(decision.shouldFilter).toBe(true);
+    expect(decision.primaryReason).toBe('ai_slop');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      { headers: Record<string, string>; body: string },
+    ];
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/decisions');
+    expect(init.headers['x-goog-api-key']).toBe('gemini_test_key');
+    const body = JSON.parse(init.body) as {
+      model: string;
+      input: string;
+      questions: Record<string, { type: string; instructions: string }>;
+    };
+    expect(body.model).toBe('gemini-decision-1');
+    expect(body.input).toContain('ai美女');
+    expect(body.questions.ai_slop.type).toBe('noul');
+    expect(body.questions.ai_slop.instructions).toContain('AI slop');
+
+    expect(engine.lastRunMeta?.engine).toBe('decisions');
+    expect(engine.lastRunMeta?.confidences.ai_slop).toBe(0.9);
+  });
+
+  it('falls back to unfiltered when the API returns a safety 400', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: { code: 'safety', message: 'Request blocked due to safety violations' },
+        }),
+      }))
+    );
+    const engine = new FilterEngine({ engine: 'decisions', geminiApiKey: 'k' });
+    const decision = await engine.evaluateTweet(slopTweet, getDefaultUserSettings());
+    expect(decision.shouldFilter).toBe(false);
+    expect(engine.lastRunMeta?.error).toContain('400');
+  });
+
+  it('uses mock evaluation and never calls fetch when no Gemini key is configured', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const engine = new FilterEngine({ engine: 'decisions' });
+    expect(engine.mockMode).toBe(true);
+
+    const decision = await engine.evaluateTweet(slopTweet, getDefaultUserSettings());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(decision.shouldFilter).toBe(true);
+    expect(decision.primaryReason).toBe('ai_slop');
+  });
+
+  it('testConnection reports ok / auth-failed / unreachable for the decisions engine', async () => {
+    stubFetchOk({ probe: { type: 'noul', noul: 0.99, confidence: 0.99 } });
+    const ok = await new FilterEngine({ engine: 'decisions', geminiApiKey: 'k' }).testConnection();
+    expect(ok.level).toBe('ok');
+    expect(ok.engine).toBe('decisions');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { code: 403, message: 'API key not valid' } }),
+      }))
+    );
+    const auth = await new FilterEngine({ engine: 'decisions', geminiApiKey: 'bad' }).testConnection();
+    expect(auth.level).toBe('auth-failed');
+    expect(auth.engine).toBe('decisions');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    );
+    const unreach = await new FilterEngine({ engine: 'decisions', geminiApiKey: 'k' }).testConnection();
+    expect(unreach.level).toBe('unreachable');
   });
 });
 

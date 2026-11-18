@@ -66,6 +66,7 @@ export function normalizeSettings(stored: unknown): UserFilterSettings {
     enableImageVision,
     imageVisionMode,
     globalSensitivityMultiplier: typeof raw.globalSensitivityMultiplier === 'number' && !Number.isNaN(raw.globalSensitivityMultiplier) ? Math.max(0, raw.globalSensitivityMultiplier) : defaults.globalSensitivityMultiplier,
+    evaluationEngine: raw.evaluationEngine === 'decisions' ? 'decisions' : 'jev',
     settingsVersion: CURRENT_SETTINGS_VERSION,
   };
 }

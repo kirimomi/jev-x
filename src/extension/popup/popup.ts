@@ -39,7 +39,11 @@ async function initPopup() {
         });
       }
 
-      if (res.hasApiKey) {
+      const activeHasKey =
+        (res.settings.evaluationEngine ?? 'jev') === 'decisions'
+          ? res.hasGeminiApiKey
+          : res.hasApiKey;
+      if (activeHasKey) {
         // This badge only proves the key is loaded; real connectivity is
         // verified by the connection test on the options page (Issue #16).
         apiStatusBadge.textContent = 'キー保存済み';

@@ -1,6 +1,6 @@
 import { FilterEngine } from '../../core/filterEngine.js';
 import { getDefaultUserSettings } from '../../core/categories.js';
-import { UserFilterSettings, TweetData } from '../../types/index.js';
+import { UserFilterSettings, TweetData, EvaluationEngine } from '../../types/index.js';
 import { ExtensionRequest } from '../messages.js';
 import { markDiag } from '../diag.js';
 import { normalizeSettings, CURRENT_SETTINGS_VERSION } from '../../core/settings.js';
@@ -10,7 +10,20 @@ import { prepareImageForJev } from './jevImageService.js';
 let filterEngine: FilterEngine | null = null;
 let currentSettings: UserFilterSettings = getDefaultUserSettings();
 let currentApiKey: string | undefined = undefined;
+let currentGeminiApiKey: string | undefined = undefined;
 let initPromise: Promise<void> | null = null;
+
+function activeEngine(): EvaluationEngine {
+  return currentSettings.evaluationEngine ?? 'jev';
+}
+
+function createFilterEngine(): FilterEngine {
+  return new FilterEngine({
+    apiKey: currentApiKey,
+    geminiApiKey: currentGeminiApiKey,
+    engine: activeEngine(),
+  });
+}
 
 /**
  * Broadcast updated settings to all open x.com / twitter.com tabs
@@ -34,7 +47,7 @@ async function broadcastSettings(settings: UserFilterSettings): Promise<void> {
 }
 
 async function initEngine(): Promise<void> {
-  const data = await chrome.storage.local.get(['userSettings', 'typesafeApiKey']);
+  const data = await chrome.storage.local.get(['userSettings', 'typesafeApiKey', 'geminiApiKey']);
   if (data.userSettings) {
     const raw = data.userSettings;
     const normalized = normalizeSettings(raw);
@@ -52,14 +65,17 @@ async function initEngine(): Promise<void> {
   if (data.typesafeApiKey) {
     currentApiKey = data.typesafeApiKey as string;
   }
+  if (data.geminiApiKey) {
+    currentGeminiApiKey = data.geminiApiKey as string;
+  }
 
-  filterEngine = new FilterEngine({
-    apiKey: currentApiKey,
-    mockMode: !currentApiKey,
-  });
+  filterEngine = createFilterEngine();
 
-  markDiag('background.init', `mockMode=${!currentApiKey} hasApiKey=${Boolean(currentApiKey)}`);
-  console.log('[jev-x background] Initialized engine, mockMode:', !currentApiKey, 'showBadges:', currentSettings.showDebugBadges);
+  markDiag(
+    'background.init',
+    `engine=${activeEngine()} mockMode=${filterEngine.mockMode} hasApiKey=${Boolean(currentApiKey)} hasGeminiApiKey=${Boolean(currentGeminiApiKey)}`
+  );
+  console.log('[jev-x background] Initialized engine:', activeEngine(), 'mockMode:', filterEngine.mockMode, 'showBadges:', currentSettings.showDebugBadges);
 }
 
 function ensureEngine(): Promise<void> {
@@ -94,8 +110,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
           let tweetsToEvaluate: TweetData[] = message.tweets;
 
-          // Experimental Jev direct image mode: attach downscaled 1st image (~30KB JPEG)
-          if (visionMode === 'jev' && currentApiKey) {
+          // Experimental Jev direct image mode: attach downscaled 1st image (~30KB JPEG).
+          // Only the Jev engine can consume attached images; the Decisions
+          // engine is text-only, so skip the fetch/attach work there.
+          if (visionMode === 'jev' && currentApiKey && activeEngine() === 'jev') {
             tweetsToEvaluate = await Promise.all(
               message.tweets.map(async (tweet) => {
                 if (!tweet.primaryImageUrl || tweet.hasSensitiveWarning) {
@@ -122,7 +140,18 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           }
 
           const decisions = await filterEngine!.evaluateBatch(tweetsToEvaluate, currentSettings);
-          markDiag('background.evalDone', `decisions=${decisions.length}`);
+          const meta = filterEngine!.lastRunMeta;
+          let evalDetail = `engine=${activeEngine()} decisions=${decisions.length}`;
+          if (meta && Object.keys(meta.confidences).length > 0) {
+            const conf = Object.entries(meta.confidences)
+              .map(([k, v]) => `${k}:${(v as number).toFixed(2)}`)
+              .join(',');
+            evalDetail += ` conf(last)=${conf}`;
+          }
+          if (meta?.error) {
+            evalDetail += ` error=${meta.error}`;
+          }
+          markDiag('background.evalDone', evalDetail);
           const responsePayload = {
             decisions,
             showDebugBadges: currentSettings.showDebugBadges !== false,
@@ -158,6 +187,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           sendResponse({
             settings: currentSettings,
             hasApiKey: Boolean(currentApiKey),
+            hasGeminiApiKey: Boolean(currentGeminiApiKey),
           });
           break;
         }
@@ -178,14 +208,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
             currentApiKey = message.apiKey;
             toSave.typesafeApiKey = message.apiKey;
           }
+          if (message.geminiApiKey !== undefined) {
+            currentGeminiApiKey = message.geminiApiKey;
+            toSave.geminiApiKey = message.geminiApiKey;
+          }
 
           await chrome.storage.local.set(toSave);
 
-          // Re-initialize engine with updated key
-          filterEngine = new FilterEngine({
-            apiKey: currentApiKey,
-            mockMode: !currentApiKey,
-          });
+          // Re-initialize engine with updated keys / engine selection
+          filterEngine = createFilterEngine();
 
           await broadcastSettings(currentSettings);
           sendResponse({ success: true });
@@ -226,7 +257,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           const result = await filterEngine!.testConnection();
           markDiag(
             'background.apiTest',
-            `level=${result.level} latencyMs=${result.latencyMs}${result.error ? ` error=${result.error}` : ''}`
+            `engine=${result.engine ?? activeEngine()} level=${result.level} latencyMs=${result.latencyMs}${result.error ? ` error=${result.error}` : ''}`
           );
           sendResponse(result);
           break;

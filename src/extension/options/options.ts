@@ -1,5 +1,5 @@
 import { FILTER_CATEGORIES, getDefaultUserSettings } from '../../core/categories.js';
-import { CategoryId, ImageVisionMode, UserFilterSettings } from '../../types/index.js';
+import { CategoryId, EvaluationEngine, ImageVisionMode, UserFilterSettings } from '../../types/index.js';
 import { GetSettingsRequest, GetSettingsResponse, SaveSettingsRequest, TestApiRequest, TestApiResponse } from '../messages.js';
 import { readDiag, clearDiag } from '../diag.js';
 
@@ -8,6 +8,7 @@ const categoryUpdaters: Array<() => void> = [];
 
 const categoryListEl = document.getElementById('category-list')!;
 const apiKeyInput = document.getElementById('api-key') as HTMLInputElement;
+const geminiApiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
 const saveBtn = document.getElementById('save-all-btn')!;
 const statusMsg = document.getElementById('status-msg')!;
 
@@ -17,6 +18,14 @@ function showStatus(text: string) {
   setTimeout(() => {
     statusMsg.style.display = 'none';
   }, 2500);
+}
+
+function syncEngineRadios() {
+  const engine: EvaluationEngine = settings.evaluationEngine === 'decisions' ? 'decisions' : 'jev';
+  const radios = document.querySelectorAll<HTMLInputElement>('input[name="evaluation-engine"]');
+  radios.forEach((radio) => {
+    radio.checked = radio.value === engine;
+  });
 }
 
 function syncImageVisionModeRadios() {
@@ -134,6 +143,9 @@ async function loadSettings() {
       if (res.hasApiKey) {
         apiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (保存済み)';
       }
+      if (res.hasGeminiApiKey && geminiApiKeyInput) {
+        geminiApiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (保存済み)';
+      }
     }
   } catch (error) {
     console.warn('Failed to load settings from background:', error);
@@ -161,6 +173,17 @@ async function loadSettings() {
       saveSettings(undefined, true);
     });
   }
+
+  syncEngineRadios();
+  const engineRadios = document.querySelectorAll<HTMLInputElement>('input[name="evaluation-engine"]');
+  engineRadios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (radio.checked) {
+        settings.evaluationEngine = radio.value as EvaluationEngine;
+        saveSettings(undefined, true);
+      }
+    });
+  });
 
   syncImageVisionModeRadios();
   const imageVisionRadios = document.querySelectorAll<HTMLInputElement>('input[name="image-vision-mode"]');
@@ -203,22 +226,24 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     if (areaName === 'local' && changes.userSettings?.newValue) {
       settings = changes.userSettings.newValue as UserFilterSettings;
       syncBasicToggles();
+      syncEngineRadios();
       syncImageVisionModeRadios();
     }
   });
 }
 
-async function saveSettings(apiKey?: string, quiet = false) {
+async function saveSettings(apiKey?: string, quiet = false, geminiApiKey?: string) {
   const req: SaveSettingsRequest = {
     type: 'SAVE_SETTINGS',
     settings,
     apiKey: apiKey ? apiKey : undefined,
+    geminiApiKey: geminiApiKey ? geminiApiKey : undefined,
   };
 
   try {
     await chrome.runtime.sendMessage(req);
-    if (!quiet || apiKey) {
-      showStatus(apiKey ? 'APIキーを保存しました。' : '設定を保存しました。');
+    if (!quiet || apiKey || geminiApiKey) {
+      showStatus(apiKey || geminiApiKey ? 'APIキーを保存しました。' : '設定を保存しました。');
     } else {
       showStatus('保存しました');
     }
@@ -254,6 +279,31 @@ if (saveApiKeyBtn && apiKeyInput) {
   });
 }
 
+const saveGeminiApiKeyBtn = document.getElementById('save-gemini-api-key-btn') as HTMLButtonElement | null;
+if (saveGeminiApiKeyBtn && geminiApiKeyInput) {
+  geminiApiKeyInput.addEventListener('input', () => {
+    const hasInput = geminiApiKeyInput.value.trim().length > 0;
+    saveGeminiApiKeyBtn.disabled = !hasInput;
+    saveGeminiApiKeyBtn.style.opacity = hasInput ? '1' : '0.5';
+  });
+
+  const handleSaveGeminiApiKey = () => {
+    const newApiKey = geminiApiKeyInput.value.trim();
+    if (newApiKey) {
+      saveSettings(undefined, false, newApiKey);
+      geminiApiKeyInput.value = '';
+      geminiApiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (保存済み)';
+      saveGeminiApiKeyBtn.disabled = true;
+      saveGeminiApiKeyBtn.style.opacity = '0.5';
+    }
+  };
+
+  saveGeminiApiKeyBtn.addEventListener('click', handleSaveGeminiApiKey);
+  geminiApiKeyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleSaveGeminiApiKey();
+  });
+}
+
 const resetDefaultsBtn = document.getElementById('reset-defaults-btn');
 if (resetDefaultsBtn) {
   resetDefaultsBtn.addEventListener('click', () => {
@@ -263,6 +313,7 @@ if (resetDefaultsBtn) {
       settings.globalSensitivityMultiplier = defaultSettings.globalSensitivityMultiplier;
       settings.imageVisionMode = defaultSettings.imageVisionMode;
       settings.enableImageVision = defaultSettings.enableImageVision;
+      settings.evaluationEngine = defaultSettings.evaluationEngine;
       
       const globalSensitivitySlider = document.getElementById('global-sensitivity-slider') as HTMLInputElement;
       const globalSensitivityVal = document.getElementById('global-sensitivity-val');
@@ -271,6 +322,7 @@ if (resetDefaultsBtn) {
         globalSensitivityVal.textContent = `${globalSensitivitySlider.value}%`;
       }
 
+      syncEngineRadios();
       syncImageVisionModeRadios();
       renderCategories();
       saveSettings(undefined, true);
@@ -338,7 +390,8 @@ if (apiTestBtn) {
       const res = (await chrome.runtime.sendMessage(req)) as TestApiResponse | { error?: string } | undefined;
       if (resultEl) {
         if (res && 'level' in res) {
-          resultEl.textContent = `${apiTestLevelLabels[res.level]}（${res.latencyMs}ms）${res.error ? `: ${res.error}` : ''}`;
+          const engineLabel = res.engine === 'decisions' ? 'Decisions' : 'Jev';
+          resultEl.textContent = `${engineLabel}: ${apiTestLevelLabels[res.level]}（${res.latencyMs}ms）${res.error ? `: ${res.error}` : ''}`;
           resultEl.style.color = res.level === 'ok' ? 'var(--success)' : '#f4212e';
         } else {
           resultEl.textContent = `テスト失敗: ${res && 'error' in res && res.error ? res.error : '応答なし'}`;

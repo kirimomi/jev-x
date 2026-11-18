@@ -34,12 +34,14 @@ export interface GetSettingsRequest {
 export interface GetSettingsResponse {
   settings: UserFilterSettings;
   hasApiKey: boolean;
+  hasGeminiApiKey: boolean;
 }
 
 export interface SaveSettingsRequest {
   type: 'SAVE_SETTINGS';
   settings: UserFilterSettings;
   apiKey?: string;
+  geminiApiKey?: string;
 }
 
 export interface SaveSettingsResponse {
