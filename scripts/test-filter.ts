@@ -11,7 +11,7 @@ interface BenchmarkCase {
 }
 
 // Benchmark test suite covering confusing Safe (False Positive candidates) and Filtered targets across all 8 categories
-const BENCHMARK_CASES: BenchmarkCase[] = [
+export const BENCHMARK_CASES: BenchmarkCase[] = [
   // --- SAFE (誤検知してはいけない境界ケース) ---
   {
     expectedFilter: false,
@@ -343,7 +343,10 @@ async function runTest() {
   console.log('='.repeat(78));
 }
 
-runTest().catch((err) => {
-  console.error('Test execution failed:', err);
-  process.exit(1);
-});
+// Only auto-run when executed directly (other scripts import BENCHMARK_CASES)
+if (process.argv[1]?.replace(/\\/g, '/').endsWith('scripts/test-filter.ts')) {
+  runTest().catch((err) => {
+    console.error('Test execution failed:', err);
+    process.exit(1);
+  });
+}
