@@ -30,7 +30,7 @@ function syncEngineRadios() {
 
 function syncImageVisionModeRadios() {
   const mode: ImageVisionMode =
-    settings.imageVisionMode === 'local' || settings.imageVisionMode === 'jev' || settings.imageVisionMode === 'off'
+    settings.imageVisionMode === 'local' || settings.imageVisionMode === 'direct' || settings.imageVisionMode === 'off'
       ? settings.imageVisionMode
       : settings.enableImageVision === false
         ? 'off'

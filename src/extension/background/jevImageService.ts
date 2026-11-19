@@ -1,12 +1,14 @@
 /**
- * Experimental Jev Image Service
+ * Experimental Direct Image Service
  *
  * Fetches the primary tweet image from `https://pbs.twimg.com/`, normalizes it to JPEG,
  * and downscales it via `OffscreenCanvas` to a compact ~30KB JPEG (short side 320px,
- * strictly within Jev's 280px–1568px requirement).
+ * strictly within Jev's 280px–1568px requirement). Originally built for the Jev
+ * engine; the Gemini Decisions engine accepts the same compact JPEG as-is, so
+ * the prepared bytes now feed whichever engine is active (Issue #18 phase 2).
  *
- * NOTE: To remove Jev direct image evaluation in the future, delete this file and
- * remove the `imageVisionMode === 'jev'` branch in `background/index.ts` and `filterEngine.ts`.
+ * NOTE: To remove direct image evaluation in the future, delete this file and
+ * remove the `imageVisionMode === 'direct'` branch in `background/index.ts` and `filterEngine.ts`.
  */
 
 const JEV_MIN_DIMENSION = 280;

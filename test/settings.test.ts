@@ -119,8 +119,12 @@ describe('normalizeSettings', () => {
   });
 
   it('normalizes imageVisionMode and migrates legacy enableImageVision', () => {
-    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'jev' }).imageVisionMode).toBe('jev');
+    // Legacy 'jev' migrates to the engine-neutral 'direct' (Issue #18 phase 2)
+    expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'jev' }).imageVisionMode).toBe('direct');
     expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'jev' }).enableImageVision).toBe(false);
+
+    expect(normalizeSettings({ settingsVersion: 3, imageVisionMode: 'direct' }).imageVisionMode).toBe('direct');
+    expect(normalizeSettings({ settingsVersion: 3, imageVisionMode: 'direct' }).enableImageVision).toBe(false);
 
     expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'local' }).imageVisionMode).toBe('local');
     expect(normalizeSettings({ settingsVersion: 2, imageVisionMode: 'local' }).enableImageVision).toBe(true);

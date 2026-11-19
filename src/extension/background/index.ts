@@ -110,10 +110,11 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
           let tweetsToEvaluate: TweetData[] = message.tweets;
 
-          // Experimental Jev direct image mode: attach downscaled 1st image (~30KB JPEG).
-          // Only the Jev engine can consume attached images; the Decisions
-          // engine is text-only, so skip the fetch/attach work there.
-          if (visionMode === 'jev' && currentApiKey && activeEngine() === 'jev') {
+          // Direct image mode: attach the downscaled 1st image (~30KB JPEG)
+          // for whichever engine is active; both Jev and Gemini Decisions
+          // consume attached images (Issue #18 phase 2).
+          const activeEngineKey = activeEngine() === 'decisions' ? currentGeminiApiKey : currentApiKey;
+          if (visionMode === 'direct' && activeEngineKey) {
             tweetsToEvaluate = await Promise.all(
               message.tweets.map(async (tweet) => {
                 if (!tweet.primaryImageUrl || tweet.hasSensitiveWarning) {
@@ -125,13 +126,13 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
                 }
                 return {
                   ...tweet,
-                  jevImageBytes: prepared.bytes,
+                  attachedImageBytes: prepared.bytes,
                   vision: {
                     hasImages: true,
                     imageCount: tweet.vision?.imageCount || 1,
                     exposureScore: 0,
                     isLikelyNsfw: false,
-                    label: 'JevVision',
+                    label: 'DirectVision',
                     latencyMs: prepared.latencyMs,
                   },
                 };
@@ -147,6 +148,11 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
               .map(([k, v]) => `${k}:${(v as number).toFixed(2)}`)
               .join(',');
             evalDetail += ` conf(last)=${conf}`;
+          }
+          if (meta?.imageAttached) {
+            evalDetail += ' image=attached';
+          } else if (meta?.imageFallback) {
+            evalDetail += ' image=text-fallback';
           }
           if (meta?.error) {
             evalDetail += ` error=${meta.error}`;
@@ -271,7 +277,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionRequest, sender, sendRes
           }
 
           const visionMode = currentSettings.imageVisionMode ?? (currentSettings.enableImageVision === false ? 'off' : 'local');
-          // Skip local NSFWJS when mode is 'off' or 'jev', or when adult_nsfw category itself is disabled
+          // Skip local NSFWJS when mode is 'off' or 'direct', or when adult_nsfw category itself is disabled
           if (visionMode !== 'local' || currentSettings.categories?.adult_nsfw?.enabled === false) {
             sendResponse({ score: -1 });
             return;

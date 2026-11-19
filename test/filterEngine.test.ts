@@ -73,7 +73,7 @@ describe('FilterEngine (mockMode)', () => {
     expect(decision2.shouldFilter).toBe(false);
   });
 
-  it('sends attached_image and TypeSafe-Danger-Zone-Images header when jevImageBytes is provided, and falls back to text-only on image error', async () => {
+  it('sends attached_image and TypeSafe-Danger-Zone-Images header when attachedImageBytes is provided, and falls back to text-only on image error', async () => {
     const apiEngine = new FilterEngine({ apiKey: 'ts_test_key' });
     const evalSpy = vi.fn()
       // First call with image rejects (e.g., 400 Invalid image dimensions)
@@ -98,12 +98,12 @@ describe('FilterEngine (mockMode)', () => {
       authorUsername: 'ai_poster',
       text: 'おはようございます☀️',
       primaryImageUrl: 'https://pbs.twimg.com/media/abc123?format=jpg&name=small',
-      jevImageBytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      attachedImageBytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
     };
 
     const decision = await apiEngine.evaluateTweet(tweet, {
       ...defaultSettings,
-      imageVisionMode: 'jev',
+      imageVisionMode: 'direct',
     });
 
     expect(evalSpy).toHaveBeenCalledTimes(2);
@@ -171,6 +171,69 @@ describe('FilterEngine (decisions engine, Issue #18)', () => {
 
     expect(engine.lastRunMeta?.engine).toBe('decisions');
     expect(engine.lastRunMeta?.confidences.ai_slop).toBe(0.9);
+  });
+
+  it('sends the attached image as a multimodal input part (phase 2)', async () => {
+    const fetchMock = stubFetchOk({
+      ai_slop: { type: 'noul', noul: 0.95, confidence: 0.9 },
+    });
+    const engine = new FilterEngine({ engine: 'decisions', geminiApiKey: 'k' });
+    const tweet: TweetData = {
+      ...slopTweet,
+      attachedImageBytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    };
+
+    const decision = await engine.evaluateTweet(tweet, getDefaultUserSettings());
+    expect(decision.shouldFilter).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(init.body) as { input: unknown };
+    expect(Array.isArray(body.input)).toBe(true);
+    const parts = body.input as Array<Record<string, unknown>>;
+    expect(parts[0].type).toBe('text');
+    expect(parts[0].text).toContain('ai美女');
+    expect(parts[1]).toEqual({
+      type: 'image',
+      data: '/9j/2Q==',
+      mime_type: 'image/jpeg',
+      resolution: 'low',
+    });
+    expect(engine.lastRunMeta?.imageAttached).toBe(true);
+    expect(engine.lastRunMeta?.imageFallback).toBe(false);
+  });
+
+  it('retries text-only when the image request is rejected with 400 (phase 2)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { code: 'image_safety', message: 'Image blocked by safety' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          answers: { ai_slop: { type: 'noul', noul: 0.93, confidence: 0.9 } },
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const engine = new FilterEngine({ engine: 'decisions', geminiApiKey: 'k' });
+    const tweet: TweetData = {
+      ...slopTweet,
+      attachedImageBytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    };
+
+    const decision = await engine.evaluateTweet(tweet, getDefaultUserSettings());
+    expect(decision.shouldFilter).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [, retryInit] = fetchMock.mock.calls[1] as unknown as [string, { body: string }];
+    const retryBody = JSON.parse(retryInit.body) as { input: unknown };
+    expect(typeof retryBody.input).toBe('string');
+    expect(engine.lastRunMeta?.imageAttached).toBe(false);
+    expect(engine.lastRunMeta?.imageFallback).toBe(true);
   });
 
   it('falls back to unfiltered when the API returns a safety 400', async () => {

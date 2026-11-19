@@ -45,6 +45,23 @@ interface DecisionsErrorBody {
 
 type DecisionsHttpError = Error & { status?: number; apiCode?: number | string };
 
+/** Multimodal input parts for the Decisions API (text-only calls use a plain string) */
+type DecisionsInputPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mime_type: string; resolution: string };
+
+type DecisionsInput = string | DecisionsInputPart[];
+
+/** Chunked base64 encoding that stays safe for large byte arrays */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 /**
  * Builds structured State context for Jev evaluation
  */
@@ -83,8 +100,8 @@ export function buildTweetState(tweet: TweetData): string {
     parts.push(`[X公式フラグ]: センシティブ警告オーバーレイあり (成人向け/閲覧注意判定)`);
   }
 
-  // Only include local NSFWJS text summary when Jev direct image attachment is NOT active
-  if (!tweet.jevImageBytes && tweet.vision && tweet.vision.hasImages && tweet.vision.label !== 'JevVision') {
+  // Only include local NSFWJS text summary when direct image attachment is NOT active
+  if (!tweet.attachedImageBytes && tweet.vision && tweet.vision.hasImages && tweet.vision.label !== 'DirectVision') {
     if (tweet.vision.label === 'Skipped') {
       parts.push(`[画像解析(Vision)]: 無効 (ユーザー設定によりスキップ)`);
     } else {
@@ -105,6 +122,10 @@ export class FilterEngine {
     engine: EvaluationEngine;
     confidences: Partial<Record<CategoryId, number>>;
     error?: string;
+    /** Decisions only: an image was attached to the request */
+    imageAttached?: boolean;
+    /** Decisions only: the image request was rejected and retried text-only */
+    imageFallback?: boolean;
   };
   // Cache raw evaluated scores and measured latency keyed by composite state hash (tweet.id + state signature)
   private scoreCache = new Map<string, { scores: Record<CategoryId, number>; latencyMs: number }>();
@@ -130,8 +151,8 @@ export class FilterEngine {
     const imgCount = tweet.vision?.imageCount ?? (tweet.imageAlts?.length ?? 0);
     const hasWarn = tweet.hasSensitiveWarning ? '1' : '0';
     const exp = tweet.vision?.exposureScore ?? 0;
-    const hasJevImg = tweet.jevImageBytes ? 'jev1' : 'jev0';
-    return `${tweet.id}:${imgCount}:${hasWarn}:${exp}:${hasJevImg}`;
+    const hasAttachedImg = tweet.attachedImageBytes ? 'img1' : 'img0';
+    return `${tweet.id}:${imgCount}:${hasWarn}:${exp}:${hasAttachedImg}`;
   }
 
   /**
@@ -171,7 +192,7 @@ export class FilterEngine {
         try {
           categoryScores =
             this.engine === 'decisions'
-              ? await this.evaluateWithDecisions(stateText, activeCategoryIds)
+              ? await this.evaluateWithDecisions(tweet, stateText, activeCategoryIds)
               : await this.evaluateWithJev(tweet, stateText, activeCategoryIds);
           latencyMs = Math.round(performance.now() - startTime);
           this.scoreCache.set(cacheKey, { scores: categoryScores, latencyMs });
@@ -216,12 +237,12 @@ export class FilterEngine {
         setTimeout(() => reject(new Error('Jev API timeout')), 8000)
       );
       const reqCall =
-        useImage && tweet.jevImageBytes
+        useImage && tweet.attachedImageBytes
           ? this.client!.systemOne(
               {
                 state: {
                   post: stateText,
-                  attached_image: image(tweet.jevImageBytes),
+                  attached_image: image(tweet.attachedImageBytes),
                 },
                 questions,
               },
@@ -235,7 +256,7 @@ export class FilterEngine {
     };
 
     let response;
-    if (tweet.jevImageBytes) {
+    if (tweet.attachedImageBytes) {
       try {
         response = await callSystemOne(true);
       } catch (imgErr) {
@@ -259,11 +280,14 @@ export class FilterEngine {
   }
 
   /**
-   * Evaluates with the Gemini Decisions API (Issue #18). Text-only in this
-   * first phase: image bytes are never attached, so a safety block on the
-   * text itself surfaces as an error and the caller falls back to unfiltered.
+   * Evaluates with the Gemini Decisions API (Issue #18). When the tweet
+   * carries attached image bytes (direct vision mode), they are sent as a
+   * multimodal input part alongside the text. If the image request is
+   * rejected with HTTP 400 (for example an image_safety block), the call is
+   * retried once text-only instead of dropping the tweet to unfiltered.
    */
   private async evaluateWithDecisions(
+    tweet: TweetData,
     stateText: string,
     activeCategoryIds: CategoryId[]
   ): Promise<Record<CategoryId, number>> {
@@ -275,7 +299,37 @@ export class FilterEngine {
       }
     }
 
-    const data = await this.callDecisions(stateText, questions);
+    let data: DecisionsResponse;
+    let imageAttached = false;
+    let imageFallback = false;
+    const imageBytes = tweet.attachedImageBytes;
+    if (imageBytes) {
+      const parts: DecisionsInputPart[] = [
+        { type: 'text', text: stateText },
+        {
+          type: 'image',
+          data: bytesToBase64(imageBytes),
+          mime_type: 'image/jpeg',
+          resolution: 'low',
+        },
+      ];
+      try {
+        data = await this.callDecisions(parts, questions);
+        imageAttached = true;
+      } catch (err) {
+        if ((err as DecisionsHttpError).status !== 400) {
+          throw err;
+        }
+        console.warn(
+          `[FilterEngine] Decisions image evaluation failed for ${tweet.id}, falling back to text-only:`,
+          err
+        );
+        data = await this.callDecisions(stateText, questions);
+        imageFallback = true;
+      }
+    } else {
+      data = await this.callDecisions(stateText, questions);
+    }
 
     const scores = {} as Record<CategoryId, number>;
     const confidences: Partial<Record<CategoryId, number>> = {};
@@ -284,7 +338,7 @@ export class FilterEngine {
       scores[catId] = ans?.type === 'noul' && typeof ans.noul === 'number' ? ans.noul : 0;
       if (ans && typeof ans.confidence === 'number') confidences[catId] = ans.confidence;
     }
-    this.lastRunMeta = { engine: 'decisions', confidences };
+    this.lastRunMeta = { engine: 'decisions', confidences, imageAttached, imageFallback };
     return scores;
   }
 
@@ -293,7 +347,7 @@ export class FilterEngine {
    * HTTP status (and API error code) on failure so callers can classify it.
    */
   private async callDecisions(
-    input: string,
+    input: DecisionsInput,
     questions: Record<string, { type: 'noul'; instructions: string }>
   ): Promise<DecisionsResponse> {
     const controller = new AbortController();

@@ -50,9 +50,13 @@ export function normalizeSettings(stored: unknown): UserFilterSettings {
     normalizedCategories[cat.id] = { enabled, threshold };
   }
 
-  let imageVisionMode: 'local' | 'jev' | 'off' = defaults.imageVisionMode ?? 'local';
-  if (raw.imageVisionMode === 'local' || raw.imageVisionMode === 'jev' || raw.imageVisionMode === 'off') {
+  let imageVisionMode: 'local' | 'direct' | 'off' = defaults.imageVisionMode ?? 'local';
+  if (raw.imageVisionMode === 'local' || raw.imageVisionMode === 'direct' || raw.imageVisionMode === 'off') {
     imageVisionMode = raw.imageVisionMode;
+  } else if (raw.imageVisionMode === 'jev') {
+    // Phase 2 (Issue #18): the direct-attachment mode was named after the
+    // Jev engine; it now applies to whichever engine is active.
+    imageVisionMode = 'direct';
   } else if (typeof raw.enableImageVision === 'boolean') {
     imageVisionMode = raw.enableImageVision ? 'local' : 'off';
   }

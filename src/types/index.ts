@@ -16,12 +16,13 @@ export interface OgpCardInfo {
 export type EvaluationEngine = 'jev' | 'decisions';
 
 /**
- * Image vision evaluation mode:
+ * Image vision evaluation mode (engine-neutral, Issue #18 phase 2):
  * - 'local': Local NSFWJS in Offscreen Document (only affects adult_nsfw exposure)
- * - 'jev': Experimental direct image attachment to Jev API (affects AI slop, scam text in images, adult, etc.)
+ * - 'direct': Experimental direct image attachment to the active evaluation
+ *   engine, Jev or Gemini Decisions (affects AI slop, scam text in images, adult, etc.)
  * - 'off': Text-only evaluation
  */
-export type ImageVisionMode = 'local' | 'jev' | 'off';
+export type ImageVisionMode = 'local' | 'direct' | 'off';
 
 /**
  * Image vision analysis result
@@ -31,7 +32,7 @@ export interface ImageVisionResult {
   imageCount: number;
   exposureScore: number; // 0.0 - 1.0 (skin/nudity ratio estimate)
   isLikelyNsfw: boolean;
-  label: 'Neutral' | 'Sexy' | 'Explicit' | 'WarningOverlay' | 'Skipped' | 'JevVision';
+  label: 'Neutral' | 'Sexy' | 'Explicit' | 'WarningOverlay' | 'Skipped' | 'DirectVision';
   details?: string;
   latencyMs?: number;
 }
@@ -47,10 +48,10 @@ export interface TweetData {
   ogp?: OgpCardInfo;
   quoteText?: string;
   imageAlts?: string[];
-  /** Primary content image URL (1st image on pbs.twimg.com) for optional Jev image evaluation */
+  /** Primary content image URL (1st image on pbs.twimg.com) for optional direct image evaluation */
   primaryImageUrl?: string;
-  /** Resized small JPEG bytes attached by background service when imageVisionMode === 'jev' */
-  jevImageBytes?: Uint8Array;
+  /** Resized small JPEG bytes attached by background service when imageVisionMode === 'direct' */
+  attachedImageBytes?: Uint8Array;
   isReply?: boolean;
   hasSensitiveWarning?: boolean;
   vision?: ImageVisionResult;
@@ -106,7 +107,7 @@ export interface UserFilterSettings {
   showFoldBanner: boolean;
   /** Whether to run local image recognition (pixel exposure analysis) - kept synced with imageVisionMode for compatibility */
   enableImageVision: boolean;
-  /** Image recognition engine selection ('local' | 'jev' | 'off'). Defaults to 'local'. */
+  /** Image recognition mode selection ('local' | 'direct' | 'off'). Defaults to 'local'. */
   imageVisionMode?: ImageVisionMode;
   /** Schema version for settings persistence & migration */
   settingsVersion?: number;
